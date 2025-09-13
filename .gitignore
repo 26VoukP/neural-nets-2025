@@ -1,0 +1,44 @@
+# Ignore Java class files and binaries
+*.class
+*.jar
+*.war
+*.ear
+
+# Ignore log files
+*.log
+
+# Ignore VS Code settings
+.vscode/
+
+# Ignore IntelliJ IDEA project files
+.idea/
+*.iml
+out/
+
+# Ignore Eclipse project files
+.project
+.classpath
+.settings/
+
+# Ignore NetBeans project files
+nbproject/
+build/
+
+# Ignore Mac system files
+.DS_Store
+
+# Ignore Windows system files
+Thumbs.db
+
+# Ignore other common files
+bin/
+lib/
+
+# Ignore Python cache (if any)
+__pycache__/
+*.pyc
+
+# Ignore temporary files
+*.tmp
+*.swp
+*~
