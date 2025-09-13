@@ -89,8 +89,10 @@ public class FeedforwardLayer
    public void initializeRandomWeights(double max, double min, int activations, int inputs)
    {
       this.weights = new double[activations][inputs];
-      for (int i1 = 0; i1 < activations; i1++) {
-         for (int i2 = 0; i2 < inputs; i2++) {
+      for (int i1 = 0; i1 < activations; i1++)
+      {
+         for (int i2 = 0; i2 < inputs; i2++)
+         {
            weights[i1][i2] = generateRandomWeight(max, min);
          }
       }
@@ -106,7 +108,8 @@ public class FeedforwardLayer
    public double dotProduct(double[] a, double[] b, int input_activations)
    {
       double sum = 0.0;
-      for (int i = 0; i < input_activations; i++) {
+      for (int i = 0; i < input_activations; i++)
+      {
          sum += a[i] * b[i];
       }
       return sum;
@@ -120,7 +123,8 @@ public class FeedforwardLayer
    public double[] passThroughLayer(double[] inputs)
    {
       double[] hidden = new double[this.numActivations];
-      for (int i = 0; i < this.numActivations; i++) {
+      for (int i = 0; i < this.numActivations; i++)
+      {
          hidden[i] = this.activationFunction.apply(dotProduct(inputs, this.weights[i], inputs.length));
       }
       return hidden;
@@ -143,8 +147,10 @@ public class FeedforwardLayer
     */
    public void adjustWeightArray(double[][] deltas)
    {
-      for (int neuronIndex = 0; neuronIndex < numActivations; neuronIndex++) {
-         for (int weightIndex = 0; weightIndex < deltas[neuronIndex].length; weightIndex++) {
+      for (int neuronIndex = 0; neuronIndex < numActivations; neuronIndex++)
+      {
+         for (int weightIndex = 0; weightIndex < deltas[neuronIndex].length; weightIndex++)
+         {
             this.weights[neuronIndex][weightIndex] += deltas[neuronIndex][weightIndex];
          }
       }
