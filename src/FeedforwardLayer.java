@@ -8,7 +8,7 @@
  */
 public class FeedforwardLayer
 {
-   public int numActivations;
+   public int numInputs, numActivations;
    public static final java.util.HashMap<String, Function> activationMap = new java.util.HashMap<>();
    static
    {
@@ -37,35 +37,30 @@ public class FeedforwardLayer
    public Function activationFunction;
    public Function activationFunctionDerivative;
    public double[][] weights;
+   public double[] unactivatedOutput, activations;
+
    /**
-    * Initializes the layer with random weights and a specified activation function.
-    * @param inputValues Number of input neurons
-    * @param numActivations Number of output neurons
-    * @param maxWeight Maximum weight value
-    * @param minWeight Minimum weight value
-    * @param activationFunction Name of the activation function
+    * Sets the activation function and its derivative based on the provided name.
+    * @param name
     */
-   public void initializeLayer(int inputValues, int numActivations, double maxWeight, double minWeight, String activationFunction)
+   public void setActivationFunction(String name) 
    {
-      this.numActivations = numActivations;
-      this.activationFunction = activationMap.getOrDefault(activationFunction.toLowerCase(), activationMap.get("linear"));
-      this.activationFunctionDerivative = activationDerivativeMap.getOrDefault(activationFunction.toLowerCase(), activationDerivativeMap.get("linear"));
-      initializeRandomWeights(maxWeight, minWeight, numActivations, inputValues);
+       this.activationFunction = activationMap.get(name);
+       this.activationFunctionDerivative = activationDerivativeMap.get(name);
    }
 
    /**
-    * Initializes the layer with manually specified weights and activation function.
-    * @param inputValues Number of input neurons
+    * Initializes the arrays for weights and outputs.
     * @param numActivations Number of output neurons
-    * @param weights Weight matrix
-    * @param activationFunction Name of the activation function
+    * @param numInputs Number of input neurons
     */
-   public void initializeLayer(int inputValues, int numActivations, double[][] weights, String activationFunction)
+   public void initializeArrays(int numActivations, int numInputs)
    {
+      this.numInputs = numInputs;
+      this.unactivatedOutput = new double[numActivations];
       this.numActivations = numActivations;
-      this.activationFunction = activationMap.getOrDefault(activationFunction.toLowerCase(), activationMap.get("linear"));
-      this.activationFunctionDerivative = activationDerivativeMap.getOrDefault(activationFunction.toLowerCase(), activationDerivativeMap.get("linear"));
-      this.weights = weights;
+      this.activations = new double[numActivations];
+      this.weights = new double[numActivations][numInputs];
    }
 
    /**
@@ -74,7 +69,7 @@ public class FeedforwardLayer
     * @param min Minimum value
     * @return Random weight
     */
-   public double generateRandomWeight(double max, double min)
+   public double generateRandomWeight(double min, double max)
    {
       return Math.random() * (max - min) + min;
    }
@@ -86,14 +81,13 @@ public class FeedforwardLayer
     * @param activations Number of output neurons
     * @param inputs Number of input neurons
     */
-   public void initializeRandomWeights(double max, double min, int activations, int inputs)
+   public void initializeRandomWeights(double min, double max)
    {
-      this.weights = new double[activations][inputs];
-      for (int i1 = 0; i1 < activations; i1++)
+      for (int i1 = 0; i1 < numActivations; i1++)
       {
-         for (int i2 = 0; i2 < inputs; i2++)
+         for (int i2 = 0; i2 < numInputs; i2++)
          {
-           weights[i1][i2] = generateRandomWeight(max, min);
+           weights[i1][i2] = generateRandomWeight(min, max);
          }
       }
    }
@@ -120,25 +114,25 @@ public class FeedforwardLayer
     * @param inputs Input vector
     * @return Output activations
     */
-   public double[] passThroughLayer(double[] inputs)
+   public double[] passThroughWeights(double[] inputs)
    {
-      double[] hidden = new double[this.numActivations];
       for (int i = 0; i < this.numActivations; i++)
       {
-         hidden[i] = this.activationFunction.apply(dotProduct(inputs, this.weights[i], inputs.length));
+         unactivatedOutput[i] = dotProduct(inputs, this.weights[i], inputs.length);
       }
-      return hidden;
+      return unactivatedOutput;
    }
 
    /**
-    * Adjusts a single weight by a given delta.
-    * @param neuronIndex Index of the neuron
-    * @param weightIndex Index of the weight
-    * @param delta Value to add to the weight
+    * Applies the activation function to the input values.
+    * @param inputs
+    * @return
     */
-   public void adjustWeight(int neuronIndex, int weightIndex, double delta)
-   {
-      this.weights[neuronIndex][weightIndex] += delta;
+   public double[] activateValues(double[] unactivatedNeurons) {
+       for (int i = 0; i < this.numActivations; i++) {
+           activations[i] = this.activationFunction.apply(unactivatedNeurons[i]);
+       }
+       return activations;
    }
 
    /**

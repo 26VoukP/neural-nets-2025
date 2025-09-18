@@ -15,58 +15,11 @@ public class Pereceptron
    public FeedforwardLayer layer1;
    public FeedforwardLayer layer2;
    public int numCases, IterationMax;
-
-   /**
-    * Initializes the network with manually specified weights.
-    * @param inputDim Number of input neurons
-    * @param hiddenDim Number of hidden neurons
-    * @param outputDim Number of output neurons
-    * @param numExamples Number of training examples
-    * @param w1 Weights from input to hidden layer
-    * @param w2 Weights from hidden to output layer
-    * @param activationName Activation function name
-    * @param lr Learning rate
-    */
-   public void initializeNetwork(int inputDim, int hiddenDim, int outputDim, int numExamples, double ETarget, int maxIterations, double[][] w1, double[][] w2,String activationName, double lr)
-   {
-      numInputs = inputDim;
-      numHidden = hiddenDim;
-      numOutputs = outputDim;
-      learningRate = lr;
-      numCases = numExamples;
-      IterationMax = maxIterations;
-      ECutoff = ETarget;
-      layer1 = new FeedforwardLayer();
-      layer1.initializeLayer(numInputs, numHidden, w1, activationName);
-      layer2 = new FeedforwardLayer();
-      layer2.initializeLayer(numHidden, numOutputs, w2, activationName);
-   }
-
-   /**
-    * Initializes the network with random weights.
-    * @param inputDim Number of input neurons
-    * @param hiddenDim Number of hidden neurons
-    * @param outputDim Number of output neurons
-    * @param numExamples Number of training examples
-    * @param maxVal Maximum weight value
-    * @param minVal Minimum weight value
-    * @param activationName Activation function name
-    * @param lr Learning rate
-    */
-   public void initializeNetwork(int inputDim, int hiddenDim, int outputDim, int numExamples, double ETarget, int maxIterations, double maxVal, double minVal, String activationName, double lr)
-   {
-      numInputs = inputDim;
-      numHidden = hiddenDim;
-      numOutputs = outputDim;
-      learningRate = lr;
-      numCases = numExamples;
-      IterationMax = maxIterations;
-      ECutoff = ETarget;
-      layer1 = new FeedforwardLayer();
-      layer1.initializeLayer(numInputs, numHidden, maxVal, minVal, activationName);
-      layer2 = new FeedforwardLayer();
-      layer2.initializeLayer(numHidden, numOutputs, maxVal, minVal, activationName);
-   }
+   public String activationName;
+   public double[][] layer1Deltas, layer2Deltas;
+   public double[][] trainingInputs;
+   public double[] groundTruths, networkOutputs;
+   public double averageError;
 
    /**
     * Performs a forward pass through the network.
@@ -75,8 +28,47 @@ public class Pereceptron
     */
    public double forwardPass(double[] inputs)
    {
-      double[] hiddenActivations = layer1.passThroughLayer(inputs);
-      return layer2.passThroughLayer(hiddenActivations)[0];
+      return layer2.activateValues(
+         layer2.passThroughWeights(
+            layer1.activateValues(
+               layer1.passThroughWeights(inputs)
+            )
+         )
+      )[0]; // Gets output in double form as opposed to double[] with length 1
+   }
+
+   /**
+    * Runs the network on all training inputs and stores the outputs.
+    * @return Array of network outputs
+    */
+   public void run()
+   {
+      for (int i = 0; i < numCases; i++)
+      {
+         networkOutputs[i] = forwardPass(trainingInputs[i]);
+      }
+   }
+
+   /**
+    * Prints the results of the network run.
+    * @param includeInputs Whether to include input values
+    * @param includeGroundTruths Whether to include ground truth values
+    */
+   public void printRunResults(boolean includeInputs, boolean includeGroundTruths)
+   {
+      System.out.println("Run Results:");
+      for (int i = 0; i < numCases; i++)
+      {
+         if (includeInputs)
+         {
+            System.out.print("Inputs: " + java.util.Arrays.toString(trainingInputs[i]) + " ");
+         }
+         if (includeGroundTruths)
+         {
+            System.out.print("Ground Truth: " + groundTruths[i] + " ");
+         }
+         System.out.println("Output: " + networkOutputs[i]);
+      }
    }
 
    /**
@@ -87,62 +79,92 @@ public class Pereceptron
     */
    public double calculateError(double T, double F)
    {
-      return Math.pow(T - F, 2) / 2;
+      return (T - F) * (T- F)/ 2;
    }
 
    /**
     * Runs the network with hardcoded parameters for demonstration or testing.
     */
-   public void runNetworkWithHardcodedParams()
+   public void initializeNetworkParams()
    {
-      boolean MANUAL_WEIGHTS = false;
-      boolean TRAINING = true;
-      int inputs = 2;
-      int hidden = 2;
-      int outputs = 1;
-      double lr = 0.01;
-      int numExamples = 4;
-      int maxIterations = 40000;
-      double errorThreshold = 0.01;
-      if (MANUAL_WEIGHTS) 
-      {
-         double[][] w1 = new double[][]{
-               {0.9404045278126735, 0.2241493210468354},
-               {-1.0121547995672862, -1.432402348525032},
-         };
-         double[][] w2 = new double[][]{{0.251086609938219, -0.41775164313179797}};
-         initializeNetwork(inputs, hidden, outputs, numExamples, errorThreshold, maxIterations, w1, w2, "linear", lr);
-      } // if (MANUAL_WEIGHTS)
-      else 
-      {
-         double minWeight = -1.0;
-         double maxWeight = 1.0;
-         initializeNetwork(inputs, hidden, outputs, numExamples, errorThreshold, maxIterations, maxWeight, minWeight, "linear", lr);
-      } // else (not MANUAL_WEIGHTS)
-      printNetworkWeights();
-      if (TRAINING) 
-      {
-         double[][] trainingInputs = {
-               {0.0, 0.0},
-               {1.0, 0.0},
-               {0.0, 1.0},
-               {1.0, 1.0}
-         };
-         double[] trainingOutputs = {0.0, 1.0, 1.0, 1.0};
+      numInputs = 2;
+      numHidden = 1;
+      numOutputs  = 1;
+      layer1 = new FeedforwardLayer();
+      layer2 = new FeedforwardLayer();
+      learningRate = 0.3;
+      numCases = 4;
+      IterationMax = 100000;
+      ECutoff = 0.0002;
+      min = -1.5;
+      max = 1.5;
+      activationName = "sigmoid";
+      layer1.setActivationFunction(activationName);
+      layer2.setActivationFunction(activationName);
+   }
 
-         trainNetwork(trainingInputs, trainingOutputs);
-         System.out.println("Final weights after training:");
-         printNetworkWeights();
-      }  // if (TRAINING)
-      else 
+   /**
+    * Allocates memory for the network's arrays based on configuration.
+    * @param training Whether the network is in training mode
+    */
+   public void allocateNetworkArrays(boolean training)
+   {
+      trainingInputs = new double[numCases][numInputs];
+      networkOutputs = new double[numCases];
+      layer1.initializeArrays(numHidden, numInputs);
+      layer2.initializeArrays(numOutputs, numHidden);
+      if (training)
       {
-         double[] input = {1.0, 0.0};
-         double output = forwardPass(input);
-         double error = calculateError(1.0, output);
-         System.out.println("Input: " + java.util.Arrays.toString(input));
-         System.out.println("Output: " + output);
-         System.out.println("Error: " + error);
-      } // else (not TRAINING)
+         layer1Deltas = new double[numHidden][numInputs];
+         layer2Deltas = new double[numOutputs][numHidden];
+      }
+   }
+
+   /**
+    * Populates the network's weight arrays either with manual values or random values.
+    * @param MANUAL_WEIGHTS Whether to use manual weights
+    */
+   public void populateNetworkArrays(boolean MANUAL_WEIGHTS)
+   {
+      trainingInputs = new double[][] {
+            {0.0, 0.0},
+            {1.0, 0.0},
+            {0.0, 1.0},
+            {1.0, 1.0}
+      };
+      groundTruths = new double[] {0.0, 1.0, 1.0, 0.0}; // AND operation
+      if (MANUAL_WEIGHTS) // Only a valid option for a  2-2-1 network 
+      {
+         layer1.weights = new double[][] {
+            {0.9404045278126735, 0.2241493210468354},
+            {-1.0121547995672862, -1.432402348525032}
+         };
+         layer2.weights = new double[][]{{0.251086609938219, -0.41775164313179797}};
+      }
+      else {
+         layer1.initializeRandomWeights(min, max);
+         layer2.initializeRandomWeights(min, max);
+      }
+   }
+
+   /**
+    * Trains the network for one epoch over all training cases.
+    * @return Average error over all cases
+    */
+   public double trainNetworkOneEpoch()
+   {
+      averageError = 0.0;
+      for (int i = 0; i < numCases; i++) 
+         {
+            double[] inputs = trainingInputs[i];
+            double target = groundTruths[i];
+            double[] unactivatedHiddenLayer = layer1.passThroughWeights(inputs);
+            double[] unactivatedOutput = layer2.passThroughWeights(layer1.activateValues(unactivatedHiddenLayer));
+            double output = layer2.activateValues(unactivatedOutput)[0];
+            averageError += calculateError(target, output);
+            optimize(inputs, target);
+         } // for (int i = 0; i < trainingInputs.length; i++)
+      return averageError / numCases;
    }
 
    /**
@@ -150,34 +172,24 @@ public class Pereceptron
     * @param trainingInputs Input data for training
     * @param trainingOutputs Target outputs for training
     */
-   public void trainNetwork(double[][] trainingInputs, double[] trainingOutputs)
+   public void loopTrainingWithResults()
    {
       int epoch = 0;
-      double avgError = Double.MAX_VALUE;
-      while (epoch < IterationMax && avgError > ECutoff) 
+      averageError = Double.MAX_VALUE;
+      while (epoch < IterationMax && averageError > ECutoff)
       {
-         double totalError = 0.0;
-         for (int i = 0; i < trainingInputs.length; i++) 
-         {
-            double[] inputs = trainingInputs[i];
-            double target = trainingOutputs[i];
-            double[] hiddenLayer = layer1.passThroughLayer(inputs);
-            double output = layer2.passThroughLayer(hiddenLayer)[0];
-            totalError += calculateError(target, output);
-            optimize(inputs, hiddenLayer, output, target);
-         } // for (int i = 0; i < trainingInputs.length; i++)
+         averageError = trainNetworkOneEpoch();
          epoch++;
-         avgError = totalError / numCases;
-         if (epoch % 1000 == 0) 
-            System.out.println("Epoch: " + epoch + ", Average Error: " + avgError);
-      } // while (epoch < IterationMax && avgError > ECutoff)
-      if (avgError > ECutoff) 
+         if (epoch % 1000 == 0)
+            System.out.println("Epoch: " + epoch + ", Average Error: " + averageError);
+      } // while (epoch < IterationMax && averageError > ECutoff)
+      if (epoch == IterationMax)
       {
-         System.out.println("Warning: Training did not converge to desired error value within " + IterationMax + " iterations. Final error: " + avgError);
-      } 
-      else 
+         System.out.println("Warning: Training did not converge to desired error value within " + IterationMax + " iterations. Final error: " + averageError);
+      }
+      else if (averageError <= ECutoff)
       {
-         System.out.println("Training converged successfully after " + epoch + " iterations. Final error: " + avgError);
+         System.out.println("Training converged successfully after " + epoch + " iterations. Final error: " + averageError);
       }
    }
 
@@ -211,7 +223,6 @@ public class Pereceptron
       printNetworkWeights();
    }
 
-
    /**
     * Performs a single optimization (backpropagation) step to update weights.
     * @param inputs Input vector
@@ -219,27 +230,25 @@ public class Pereceptron
     * @param output Output of the network
     * @param T Target value
     */
-   public void optimize(double[] inputs, double[] hiddenLayer, double output, double T)
-   {
-      double[][] layer1Deltas = new double[numHidden][numInputs];
-      double[][] layer2Deltas = new double[numOutputs][numHidden];
+   public void optimize(double[] inputs, double T)
+   {  
       for (int f = 0; f < numOutputs; f++) 
       {
-         double deltaOutput = -(T - output) * layer2.activationFunctionDerivative.apply(output);
-         for (int j = 0; j < numHidden; j++) 
+         double deltaOutput = -(T - layer2.activations[f]) * layer2.activationFunctionDerivative.apply(layer2.unactivatedOutput[f]);
+         for (int j = 0; j < numHidden; j++)
          {
-            double deltaWeight = -learningRate * deltaOutput * hiddenLayer[j];
+            double deltaWeight = -learningRate * deltaOutput * layer1.activations[j];
             layer2Deltas[f][j] = deltaWeight;
             for (int k = 0; k < numInputs; k++) 
             {
-               double deltaHidden = deltaOutput * layer2.weights[f][j] * layer1.activationFunctionDerivative.apply(hiddenLayer[j]);
+               double deltaHidden = deltaOutput * layer2.weights[f][j] * layer1.activationFunctionDerivative.apply(layer1.unactivatedOutput[j]);
                double deltaWeightInputHidden = -learningRate * deltaHidden * inputs[k];
                layer1Deltas[j][k] = deltaWeightInputHidden;
-            } // for (int k = 0; k < numInputs; k++) {
+            } // for (int k = 0; k < numInputs; k++)
          } // for (int j = 0; j < numHidden; j++)
-         layer1.adjustWeightArray(layer1Deltas);
-         layer2.adjustWeightArray(layer2Deltas);
-      } // for (int f = 0; f < numOutputs; f++) {
+      } // for (int f = 0; f < numOutputs; f++)
+      layer1.adjustWeightArray(layer1Deltas);
+      layer2.adjustWeightArray(layer2Deltas);
    }
 
    /**
@@ -248,7 +257,20 @@ public class Pereceptron
     */
    public static void main(String[] args)
    {
+      boolean training = true;
+      boolean manual_weights = false; // Only valid for a 2-2-1 network
+      boolean showInputs = false;
+      boolean showOutputs = true;
       Pereceptron p = new Pereceptron();
-      p.runNetworkWithHardcodedParams();
+      p.initializeNetworkParams();
+      p.allocateNetworkArrays(training);
+      p.populateNetworkArrays(manual_weights);
+      p.printNetworkParameters(training);
+      if (training)
+      {
+         p.loopTrainingWithResults();
+      }
+      p.run();
+      p.printRunResults(showInputs, showOutputs);
    }
 }
