@@ -111,6 +111,7 @@ public class Pereceptron
    {
       trainingInputs = new double[numCases][numInputs];
       networkOutputs = new double[numCases];
+      groundTruths = new double[numCases];
       layer1.initializeArrays(numHidden, numInputs);
       layer2.initializeArrays(numOutputs, numHidden);
       if (training)
@@ -132,7 +133,7 @@ public class Pereceptron
             {0.0, 1.0},
             {1.0, 1.0}
       };
-      groundTruths = new double[] {0.0, 1.0, 1.0, 0.0}; // AND operation
+      groundTruths = new double[] {0.0, 1.0, 1.0, 0.0}; // XOR operation
       if (MANUAL_WEIGHTS) // Only a valid option for a  2-2-1 network 
       {
          layer1.weights = new double[][] {
@@ -259,8 +260,7 @@ public class Pereceptron
    {
       boolean training = true;
       boolean manual_weights = false; // Only valid for a 2-2-1 network
-      boolean showInputs = false;
-      boolean showOutputs = true;
+      boolean runTestCases = true;
       Pereceptron p = new Pereceptron();
       p.initializeNetworkParams();
       p.allocateNetworkArrays(training);
@@ -271,6 +271,11 @@ public class Pereceptron
          p.loopTrainingWithResults();
       }
       p.run();
-      p.printRunResults(showInputs, showOutputs);
+      if (runTestCases)
+      {
+         boolean showInputs = true;
+         boolean showGroundTruths = true;
+         p.printRunResults(showInputs, showGroundTruths);
+      }
    }
 }
