@@ -1,5 +1,5 @@
 /**
- * The Pereceptron class implements a simple feedforward neural network with one hidden layer.
+ * The AB1Network class implements a simple feedforward neural network with one hidden layer.
  * It supports both manual and random weight initialization, training using gradient descent,
  * and evaluation on input data. The network can be configured for different activation functions
  * and learning rates and can undergo supervised learning on a predefined dataset.
@@ -59,17 +59,17 @@ public class AB1Network
     * @param min Minimum value
     * @return Random weight
     */
-   public double generateRandomWeight(double min, double max)
+   public static double generateRandomWeight(double min, double max)
    {
       return Math.random() * (max - min) + min;
-   }
+   } // generateRandomWeight(double min, double max)
 
    /**
     * Initializes the weight matrix with random values.
     * @param max Maximum weight value
     * @param min Minimum weight value
     */
-   public void initializeRandomWeights(double min, double max)
+   public void initializeRandomWeights()
    {
       for (int k = 0; k < numInputs; k++)
       {
@@ -194,7 +194,7 @@ public class AB1Network
     */
    public double calculateError(double T, double F)
    {
-      return (T - F) * (T- F)/ 2;
+      return (T - F) * (T - F) / 2;
    }
 
    /**
@@ -225,7 +225,6 @@ public class AB1Network
    {
       trainingInputs = new double[numCases][numInputs];
       networkOutputs = new double[numCases];
-      groundTruths = new double[numCases];
 
       w1 = new double[numHidden][numInputs];
       unactivatedHiddenLayer = new double[numHidden];
@@ -237,6 +236,8 @@ public class AB1Network
       {
          w1Deltas = new double[numHidden][numInputs];
          w2Deltas = new double[numOutputs][numHidden];
+
+         groundTruths = new double[numCases];
       }
    } // allocateNetworkArrays(boolean training)
 
@@ -270,7 +271,7 @@ public class AB1Network
       }
       else 
       {
-         initializeRandomWeights(min, max);
+         initializeRandomWeights();
       }
    } // populateNetworkArrays(boolean MANUAL_WEIGHTS)
 
@@ -279,12 +280,13 @@ public class AB1Network
     * @param trainingInputs Input data for training
     * @param trainingOutputs Target outputs for training
     */
-   public void loopTrainingWithResults()
+   public void loopTraining()
    {
 
       double target;
       
       epoch = 0;
+      averageError = Double.MAX_VALUE;
       while (epoch < IterationMax && averageError > ECutoff)
       {
          averageError = 0.0;
@@ -304,7 +306,7 @@ public class AB1Network
          if (epoch % 1000 == 0)
             System.out.println("Epoch: " + epoch + ", Average Error: " + averageError);
       } // while (epoch < IterationMax && averageError > ECutoff)
-   } // loopTrainingWithResults()
+   } // loopTraining()
 
    /**
     * Prints the results of the training process.
@@ -340,6 +342,8 @@ public class AB1Network
       System.out.println("Number of Hidden Neurons: " + numHidden);
       System.out.println("Number of Outputs: " + numOutputs);
       System.out.println("Learning Rate: " + learningRate);
+      System.out.println("Activation Function: " + activationName);
+      System.out.println("Weight Initialization Range: [" + min + ", " + max + "]");
 
       if (training) {
          System.out.println("Number of Training Cases: " + numCases);
@@ -401,7 +405,6 @@ public class AB1Network
     */
    public static void main(String[] args)
    {
-
       boolean training = true;
       boolean manual_weights = false; // Only valid for a 2-2-1 network
       boolean runTestCases = true;
@@ -413,9 +416,10 @@ public class AB1Network
       p.printNetworkParameters(training);
       if (training)
       {
-         p.loopTrainingWithResults();
+         p.loopTraining();
          p.printTrainingResults();
       }
+
       if (runTestCases || !training)
       {
          boolean showInputs = true;
@@ -424,4 +428,5 @@ public class AB1Network
          p.printRunResults(showInputs, showGroundTruths);
       }
    } // main(String[] args)
-} // public class Pereceptron
+
+} // public class AB1Network
