@@ -7,7 +7,7 @@
  * @author Vouk Praun-Petrovic
  * @version September 9, 2024
  */
-public class Pereceptron
+public class AB1Network
 {
    public double min, max;
    public double learningRate, ECutoff;
@@ -405,7 +405,7 @@ public class Pereceptron
       boolean training = true;
       boolean manual_weights = false; // Only valid for a 2-2-1 network
       boolean runTestCases = true;
-      Pereceptron p = new Pereceptron();
+      AB1Network p = new AB1Network();
 
       p.initializeNetworkParams();
       p.allocateNetworkArrays(training);
