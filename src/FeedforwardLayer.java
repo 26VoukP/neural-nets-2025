@@ -60,7 +60,7 @@ public class FeedforwardLayer
       this.unactivatedOutput = new double[numActivations];
       this.numActivations = numActivations;
       this.activations = new double[numActivations];
-      this.weights = new double[numActivations][numInputs];
+      this.weights = new double[numInputs][numActivations];
    }
 
    /**
@@ -87,7 +87,7 @@ public class FeedforwardLayer
       {
          for (int i2 = 0; i2 < numInputs; i2++)
          {
-           weights[i1][i2] = generateRandomWeight(min, max);
+           weights[i2][i1] = generateRandomWeight(min, max);
          }
       }
    }
@@ -143,9 +143,9 @@ public class FeedforwardLayer
    {
       for (int neuronIndex = 0; neuronIndex < numActivations; neuronIndex++)
       {
-         for (int weightIndex = 0; weightIndex < deltas[neuronIndex].length; weightIndex++)
+         for (int weightIndex = 0; weightIndex < numInputs; weightIndex++)
          {
-            this.weights[neuronIndex][weightIndex] += deltas[neuronIndex][weightIndex];
+            this.weights[weightIndex][neuronIndex] += deltas[weightIndex][neuronIndex];
          }
       }
    }

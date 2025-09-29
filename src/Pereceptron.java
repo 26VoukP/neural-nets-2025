@@ -16,38 +16,11 @@ public class Pereceptron
    public FeedforwardLayer layer2;
    public int numCases, IterationMax;
    public String activationName;
-   public double[][] layer1Deltas, layer2Deltas;
+   public double[][] w1, w2, layer1Deltas, layer2Deltas;
    public double[][] trainingInputs;
-   public double[] groundTruths, networkOutputs;
-   public double averageError;
-
-   /**
-    * Performs a forward pass through the network.
-    * @param inputs Input vector
-    * @return Output of the network
-    */
-   public double forwardPass(double[] inputs)
-   {
-      return layer2.activateValues(
-         layer2.passThroughWeights(
-            layer1.activateValues(
-               layer1.passThroughWeights(inputs)
-            )
-         )
-      )[0]; // Gets output in double form as opposed to double[] with length 1
-   }
-
-   /**
-    * Runs the network on all training inputs and stores the outputs.
-    * @return Array of network outputs
-    */
-   public void run()
-   {
-      for (int i = 0; i < numCases; i++)
-      {
-         networkOutputs[i] = forwardPass(trainingInputs[i]);
-      }
-   }
+   public double[] thetaJ, h, groundTruths, networkOutputs;
+   public double thetaI, output, averageError;
+   public int epochs;
 
    /**
     * Prints the results of the network run.
@@ -99,6 +72,8 @@ public class Pereceptron
       min = -1.5;
       max = 1.5;
       activationName = "sigmoid";
+      thetaJ = new double[numHidden];
+      h = new double[numHidden];
       layer1.setActivationFunction(activationName);
       layer2.setActivationFunction(activationName);
    }
@@ -116,8 +91,8 @@ public class Pereceptron
       layer2.initializeArrays(numOutputs, numHidden);
       if (training)
       {
-         layer1Deltas = new double[numHidden][numInputs];
-         layer2Deltas = new double[numOutputs][numHidden];
+         layer1Deltas = new double[numInputs][numHidden];
+         layer2Deltas = new double[numHidden][numOutputs];
       }
    }
 
@@ -127,13 +102,19 @@ public class Pereceptron
     */
    public void populateNetworkArrays(boolean MANUAL_WEIGHTS)
    {
-      trainingInputs = new double[][] {
-            {0.0, 0.0},
-            {1.0, 0.0},
-            {0.0, 1.0},
-            {1.0, 1.0}
-      };
-      groundTruths = new double[] {0.0, 1.0, 1.0, 0.0}; // XOR operation
+      trainingInputs[0][0] = 0.0;
+      trainingInputs[0][1] = 0.0;
+      trainingInputs[1][0] = 1.0;
+      trainingInputs[1][1] = 0.0;
+      trainingInputs[2][0] = 0.0;
+      trainingInputs[2][1] = 1.0;
+      trainingInputs[3][0] = 1.0;
+      trainingInputs[3][1] = 1.0;
+
+      groundTruths[0] = 0.0;
+      groundTruths[1] = 1.0;
+      groundTruths[2] = 1.0;
+      groundTruths[3] = 0.0; // XOR operation
       if (MANUAL_WEIGHTS) // Only a valid option for a  2-2-1 network 
       {
          layer1.weights = new double[][] {
@@ -148,6 +129,55 @@ public class Pereceptron
       }
    }
 
+   public void calculateHActivations(double[] inputs)
+   {
+      for (int j = 0; j < numHidden; j++)
+      {
+         double sum = 0.0;
+         for (int k = 0; k < numInputs; k++)
+         {
+            sum += layer1.weights[k][j] * inputs[k];
+         }
+         thetaJ[j] = sum;
+         h[j] = layer1.activationFunction.apply(sum);
+      }
+   }
+
+   public void calculateOutput()
+   {
+      double sum = 0.0;
+      for (int j = 0; j < numHidden; j++)
+      {
+         sum += layer2.weights[j][0] * h[j];
+      }
+      thetaI = sum;
+      output = layer2.activationFunction.apply(sum);
+   }
+
+   /**
+    * Performs a forward pass through the network.
+    * @param inputs Input vector
+    * @return Output of the network
+    */
+   public double forwardPass(double[] inputs)
+   {
+      calculateHActivations(inputs);
+      calculateOutput();
+      return output;
+   }
+
+   /**
+    * Runs the network on all training inputs and stores the outputs.
+    * @return Array of network outputs
+    */
+   public void run()
+   {
+      for (int i = 0; i < numCases; i++)
+      {
+         networkOutputs[i] = forwardPass(trainingInputs[i]);
+      }
+   }
+
    /**
     * Trains the network for one epoch over all training cases.
     * @return Average error over all cases
@@ -159,9 +189,7 @@ public class Pereceptron
          {
             double[] inputs = trainingInputs[i];
             double target = groundTruths[i];
-            double[] unactivatedHiddenLayer = layer1.passThroughWeights(inputs);
-            double[] unactivatedOutput = layer2.passThroughWeights(layer1.activateValues(unactivatedHiddenLayer));
-            double output = layer2.activateValues(unactivatedOutput)[0];
+            forwardPass(inputs);
             averageError += calculateError(target, output);
             optimize(inputs, target);
          } // for (int i = 0; i < trainingInputs.length; i++)
@@ -195,6 +223,31 @@ public class Pereceptron
    }
 
    /**
+    * Performs a single optimization (backpropagation) step to update weights.
+    * @param inputs Input vector
+    * @param hiddenLayer Activations of the hidden layer
+    * @param output Output of the network
+    * @param T Target value
+    */
+   public void optimize(double[] inputs, double T)
+   {  
+      double deltaOutput = -(T - output) * layer2.activationFunctionDerivative.apply(thetaI);
+      for (int j = 0; j < numHidden; j++)
+      {
+         double deltaWeight = -learningRate * deltaOutput * h[j];
+         layer2Deltas[j][0] = deltaWeight;
+         double deltaHidden = deltaOutput * layer2.weights[j][0] * layer1.activationFunctionDerivative.apply(thetaJ[j]);
+         for (int k = 0; k < numInputs; k++) 
+         {
+            double deltaWeightInputHidden = -learningRate * deltaHidden * inputs[k];
+            layer1Deltas[k][j] = deltaWeightInputHidden;
+         } // for (int k = 0; k < numInputs; k++)
+      } // for (int j = 0; j < numHidden; j++)
+      layer1.adjustWeightArray(layer1Deltas);
+      layer2.adjustWeightArray(layer2Deltas);
+   }
+
+   /**
     * Prints the current weights of the network.
     */
    public void printNetworkWeights()
@@ -222,34 +275,6 @@ public class Pereceptron
          System.out.println("Max Training Iterations: " + IterationMax);
       }
       printNetworkWeights();
-   }
-
-   /**
-    * Performs a single optimization (backpropagation) step to update weights.
-    * @param inputs Input vector
-    * @param hiddenLayer Activations of the hidden layer
-    * @param output Output of the network
-    * @param T Target value
-    */
-   public void optimize(double[] inputs, double T)
-   {  
-      for (int f = 0; f < numOutputs; f++) 
-      {
-         double deltaOutput = -(T - layer2.activations[f]) * layer2.activationFunctionDerivative.apply(layer2.unactivatedOutput[f]);
-         for (int j = 0; j < numHidden; j++)
-         {
-            double deltaWeight = -learningRate * deltaOutput * layer1.activations[j];
-            layer2Deltas[f][j] = deltaWeight;
-            for (int k = 0; k < numInputs; k++) 
-            {
-               double deltaHidden = deltaOutput * layer2.weights[f][j] * layer1.activationFunctionDerivative.apply(layer1.unactivatedOutput[j]);
-               double deltaWeightInputHidden = -learningRate * deltaHidden * inputs[k];
-               layer1Deltas[j][k] = deltaWeightInputHidden;
-            } // for (int k = 0; k < numInputs; k++)
-         } // for (int j = 0; j < numHidden; j++)
-      } // for (int f = 0; f < numOutputs; f++)
-      layer1.adjustWeightArray(layer1Deltas);
-      layer2.adjustWeightArray(layer2Deltas);
    }
 
    /**
