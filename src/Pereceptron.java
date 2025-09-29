@@ -12,15 +12,38 @@ public class Pereceptron
    public double min, max;
    public double learningRate, ECutoff;
    public int numInputs, numHidden, numOutputs, numLayers;
-   public FeedforwardLayer layer1;
-   public FeedforwardLayer layer2;
    public int numCases, IterationMax;
-   public String activationName;
-   public double[][] w1, w2, layer1Deltas, layer2Deltas;
+   public double[][] w1, layer1Deltas, layer2Deltas;
    public double[][] trainingInputs;
-   public double[] thetaJ, h, groundTruths, networkOutputs;
+   public double[] w2, thetaJ, h, groundTruths, networkOutputs;
    public double thetaI, output, averageError;
    public int epochs;
+   /**
+    * Functional interface for activation functions and their derivatives.
+    */
+   @FunctionalInterface
+   public interface Function
+   {
+      double apply(double x);
+   }
+   private static final java.util.HashMap<String, Function> activationMap = new java.util.HashMap<>();
+   static
+   {
+      activationMap.put("sigmoid", x -> 1 / (1 + Math.exp(-x)));
+      activationMap.put("relu", x -> Math.max(0, x));
+      activationMap.put("linear", x -> x);
+   }
+   private static final java.util.HashMap<String, Function> activationDerivativeMap = new java.util.HashMap<>();
+   static
+   {
+      activationDerivativeMap.put("sigmoid", x -> {
+         double fx = activationMap.get("sigmoid").apply(x);
+         return fx * (1 - fx);
+      });
+      activationDerivativeMap.put("relu", x -> x > 0 ? 1 : 0);
+      activationDerivativeMap.put("linear", x -> 1.0);
+   }
+   public Function activationFunction, activationFunctionDerivative;
 
    /**
     * Prints the results of the network run.
@@ -63,19 +86,21 @@ public class Pereceptron
       numInputs = 2;
       numHidden = 5;
       numOutputs  = 1;
-      layer1 = new FeedforwardLayer();
-      layer2 = new FeedforwardLayer();
       learningRate = 0.3;
       numCases = 4;
       IterationMax = 100000;
       ECutoff = 0.0002;
       min = -1.5;
       max = 1.5;
-      activationName = "sigmoid";
       thetaJ = new double[numHidden];
       h = new double[numHidden];
-      layer1.setActivationFunction(activationName);
-      layer2.setActivationFunction(activationName);
+      setActivationFunction("sigmoid");
+   }
+
+   public void setActivationFunction(String name)
+   {
+      activationFunction = activationMap.get(name);
+      activationFunctionDerivative = activationDerivativeMap.get(name);
    }
 
    /**
@@ -87,12 +112,27 @@ public class Pereceptron
       trainingInputs = new double[numCases][numInputs];
       networkOutputs = new double[numCases];
       groundTruths = new double[numCases];
-      layer1.initializeArrays(numHidden, numInputs);
-      layer2.initializeArrays(numOutputs, numHidden);
+      w1 = new double[numInputs][numHidden];
+      thetaJ = new double[numHidden];
+      h = new double[numHidden];
+      
+      w2 = new double[numHidden];
       if (training)
       {
          layer1Deltas = new double[numInputs][numHidden];
          layer2Deltas = new double[numHidden][numOutputs];
+      }
+   }
+
+   public void generateRandomWeights()
+   {
+      for (int j = 0; j < numHidden; j++)
+      {
+         for (int k = 0; k < numInputs; k++)
+         {
+            w1[k][j] = Math.random() * (max - min) + min;
+         }
+         w2[j] = Math.random() * (max - min) + min;
       }
    }
 
@@ -117,15 +157,16 @@ public class Pereceptron
       groundTruths[3] = 0.0; // XOR operation
       if (MANUAL_WEIGHTS) // Only a valid option for a  2-2-1 network 
       {
-         layer1.weights = new double[][] {
-            {0.9404045278126735, 0.2241493210468354},
-            {-1.0121547995672862, -1.432402348525032}
-         };
-         layer2.weights = new double[][]{{0.251086609938219, -0.41775164313179797}};
+         w1[0][0] = 0.9404045278126735;
+         w1[0][1] = 0.2241493210468354;
+         w1[1][0] = -1.0121547995672862;
+         w1[1][1] = -1.432402348525032;
+
+         w2[0] = 0.251086609938219;
+         w2[1] = -0.41775164313179797;
       }
       else {
-         layer1.initializeRandomWeights(min, max);
-         layer2.initializeRandomWeights(min, max);
+         generateRandomWeights();
       }
    }
 
@@ -136,10 +177,10 @@ public class Pereceptron
          double sum = 0.0;
          for (int k = 0; k < numInputs; k++)
          {
-            sum += layer1.weights[k][j] * inputs[k];
+            sum += w1[k][j] * inputs[k];
          }
          thetaJ[j] = sum;
-         h[j] = layer1.activationFunction.apply(sum);
+         h[j] = activationFunction.apply(sum);
       }
    }
 
@@ -148,10 +189,10 @@ public class Pereceptron
       double sum = 0.0;
       for (int j = 0; j < numHidden; j++)
       {
-         sum += layer2.weights[j][0] * h[j];
+         sum += w2[j] * h[j];
       }
       thetaI = sum;
-      output = layer2.activationFunction.apply(sum);
+      output = activationFunction.apply(sum);
    }
 
    /**
@@ -191,7 +232,7 @@ public class Pereceptron
             double target = groundTruths[i];
             forwardPass(inputs);
             averageError += calculateError(target, output);
-            optimize(inputs, target);
+            train(inputs, target);
          } // for (int i = 0; i < trainingInputs.length; i++)
       return averageError / numCases;
    }
@@ -229,22 +270,33 @@ public class Pereceptron
     * @param output Output of the network
     * @param T Target value
     */
-   public void optimize(double[] inputs, double T)
+   public void train(double[] inputs, double T)
    {  
-      double deltaOutput = -(T - output) * layer2.activationFunctionDerivative.apply(thetaI);
+      double deltaOutput = -(T - output) * activationFunctionDerivative.apply(thetaI);
       for (int j = 0; j < numHidden; j++)
       {
          double deltaWeight = -learningRate * deltaOutput * h[j];
          layer2Deltas[j][0] = deltaWeight;
-         double deltaHidden = deltaOutput * layer2.weights[j][0] * layer1.activationFunctionDerivative.apply(thetaJ[j]);
+         double deltaHidden = deltaOutput * w2[j] * activationFunctionDerivative.apply(thetaJ[j]);
          for (int k = 0; k < numInputs; k++) 
          {
             double deltaWeightInputHidden = -learningRate * deltaHidden * inputs[k];
             layer1Deltas[k][j] = deltaWeightInputHidden;
          } // for (int k = 0; k < numInputs; k++)
       } // for (int j = 0; j < numHidden; j++)
-      layer1.adjustWeightArray(layer1Deltas);
-      layer2.adjustWeightArray(layer2Deltas);
+      applyWeightDeltas();
+   }
+
+   public void applyWeightDeltas()
+   {
+      for (int j = 0; j < numHidden; j++)
+      {
+         for (int k = 0; k < numInputs; k++)
+         {
+            w1[k][j] += layer1Deltas[k][j];
+         }
+         w2[j] += layer2Deltas[j][0];
+      }
    }
 
    /**
@@ -253,9 +305,9 @@ public class Pereceptron
    public void printNetworkWeights()
    {
       System.out.println("Weights from Input to Hidden Layer (w1):");
-      System.out.println(java.util.Arrays.deepToString(layer1.weights));
+      System.out.println(java.util.Arrays.deepToString(w1));
       System.out.println("Weights from Hidden to Output Layer (w2):");
-      System.out.println(java.util.Arrays.deepToString(layer2.weights));
+      System.out.println(java.util.Arrays.toString(w2));
    }
 
    /**
