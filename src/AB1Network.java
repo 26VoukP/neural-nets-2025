@@ -2,7 +2,7 @@
  * Currently, the Pereceptron class implements a simple feedforward neural network with one hidden layer.
  * It supports both manual and random weight initialization, training using gradient descent,
  * and evaluation on input data. The network can be configured for different activation functions
- * and learning rates, and is suitable for boolean operations (such as AND, OR, & EXOR).
+ * and learning rates.
  *
  * @author Vouk Praun-Petrovic
  * @version September 9, 2024
@@ -18,6 +18,7 @@ public class AB1Network
    public double[] w2, thetaJ, h, groundTruths, networkOutputs;
    public double thetaI, output, averageError;
    public int epochs;
+
    /**
     * Functional interface for activation functions and their derivatives.
     */
@@ -46,28 +47,6 @@ public class AB1Network
    public Function activationFunction, activationFunctionDerivative;
 
    /**
-    * Prints the results of the network run.
-    * @param includeInputs Whether to include input values
-    * @param includeGroundTruths Whether to include ground truth values
-    */
-   public void printRunResults(boolean includeInputs, boolean includeGroundTruths)
-   {
-      System.out.println("Run Results:");
-      for (int i = 0; i < numCases; i++)
-      {
-         if (includeInputs)
-         {
-            System.out.print("Inputs: " + java.util.Arrays.toString(trainingInputs[i]) + " ");
-         }
-         if (includeGroundTruths)
-         {
-            System.out.print("Ground Truth: " + groundTruths[i] + " ");
-         }
-         System.out.println("Output: " + networkOutputs[i]);
-      }
-   }
-
-   /**
     * Calculates the mean squared error between target and output.
     * @param T Target value
     * @param F Output value
@@ -76,54 +55,21 @@ public class AB1Network
    public double calculateError(double T, double F)
    {
       return (T - F) * (T- F)/ 2;
-   }
+   } // calculateError(double T, double F)
 
    /**
-    * Runs the network with hardcoded parameters for demonstration or testing.
+    * Sets the activation function and its derivative for the network.
+    * @param name The name of the activation function (e.g., "sigmoid", "relu", "linear").
     */
-   public void initializeNetworkParams()
-   {
-      numInputs = 2;
-      numHidden = 5;
-      numOutputs  = 1;
-      learningRate = 0.3;
-      numCases = 4;
-      IterationMax = 100000;
-      ECutoff = 0.0002;
-      min = -1.5;
-      max = 1.5;
-      thetaJ = new double[numHidden];
-      h = new double[numHidden];
-      setActivationFunction("sigmoid");
-   }
-
    public void setActivationFunction(String name)
    {
       activationFunction = activationMap.get(name);
       activationFunctionDerivative = activationDerivativeMap.get(name);
-   }
+   } // setActivationFunction(String name)
 
    /**
-    * Allocates memory for the network's arrays based on configuration.
-    * @param training Whether the network is in training mode
+    * Generates random weights for the network within the specified range.
     */
-   public void allocateNetworkArrays(boolean training)
-   {
-      trainingInputs = new double[numCases][numInputs];
-      networkOutputs = new double[numCases];
-      groundTruths = new double[numCases];
-      w1 = new double[numInputs][numHidden];
-      thetaJ = new double[numHidden];
-      h = new double[numHidden];
-      
-      w2 = new double[numHidden];
-      if (training)
-      {
-         layer1Deltas = new double[numInputs][numHidden];
-         layer2Deltas = new double[numHidden][numOutputs];
-      }
-   }
-
    public void generateRandomWeights()
    {
       for (int j = 0; j < numHidden; j++)
@@ -134,7 +80,48 @@ public class AB1Network
          }
          w2[j] = Math.random() * (max - min) + min;
       }
-   }
+   } // generateRandomWeights()
+
+   /**
+    * Runs the network with hardcoded parameters for demonstration or testing.
+    */
+   public void initializeNetworkParams()
+   {
+      numInputs = 2;
+      numHidden = 5;
+      numOutputs = 1;
+      learningRate = 0.3;
+      numCases = 4;
+      IterationMax = 100000;
+      ECutoff = 0.0002;
+      min = -1.5;
+      max = 1.5;
+      thetaJ = new double[numHidden];
+      h = new double[numHidden];
+      setActivationFunction("sigmoid");
+   } // initializeNetworkParams()
+
+   /**
+    * Allocates memory for the network's arrays based on configuration.
+    * @param training Whether the network is in training mode
+    */
+   public void allocateNetworkArrays(boolean training)
+   {
+      trainingInputs = new double[numCases][numInputs];
+      networkOutputs = new double[numCases];
+      groundTruths = new double[numCases];
+
+      w1 = new double[numInputs][numHidden];
+      thetaJ = new double[numHidden];
+      h = new double[numHidden];
+      
+      w2 = new double[numHidden];
+      if (training)
+      {
+         layer1Deltas = new double[numInputs][numHidden];
+         layer2Deltas = new double[numHidden][numOutputs];
+      }
+   } // allocateNetworkArrays(boolean training)
 
    /**
     * Populates the network's weight arrays either with manual values or random values.
@@ -155,6 +142,7 @@ public class AB1Network
       groundTruths[1] = 1.0;
       groundTruths[2] = 1.0;
       groundTruths[3] = 0.0; // XOR operation
+
       if (MANUAL_WEIGHTS) // Only a valid option for a  2-2-1 network 
       {
          w1[0][0] = 0.9404045278126735;
@@ -168,8 +156,12 @@ public class AB1Network
       else {
          generateRandomWeights();
       }
-   }
+   } // populateNetworkArrays(boolean MANUAL_WEIGHTS)
 
+   /**
+    * Calculates the activations for the hidden layer neurons.
+    * @param inputs The input vector to the network.
+    */
    public void calculateHActivations(double[] inputs)
    {
       for (int j = 0; j < numHidden; j++)
@@ -182,8 +174,11 @@ public class AB1Network
          thetaJ[j] = sum;
          h[j] = activationFunction.apply(sum);
       }
-   }
+   } // calculateHActivations(double[] inputs)
 
+   /**
+    * Calculates the output of the network based on hidden layer activations.
+    */
    public void calculateOutput()
    {
       double sum = 0.0;
@@ -193,19 +188,18 @@ public class AB1Network
       }
       thetaI = sum;
       output = activationFunction.apply(sum);
-   }
+   } // calculateOutput()
 
    /**
     * Performs a forward pass through the network.
     * @param inputs Input vector
     * @return Output of the network
     */
-   public double forwardPass(double[] inputs)
+   public void forwardPass(double[] inputs)
    {
       calculateHActivations(inputs);
       calculateOutput();
-      return output;
-   }
+   } // forwardPass(double[] inputs)
 
    /**
     * Runs the network on all training inputs and stores the outputs.
@@ -215,9 +209,10 @@ public class AB1Network
    {
       for (int i = 0; i < numCases; i++)
       {
-         networkOutputs[i] = forwardPass(trainingInputs[i]);
+          forwardPass(trainingInputs[i]);
+          networkOutputs[i] = output;
       }
-   }
+   } // run()
 
    /**
     * Trains the network for one epoch over all training cases.
@@ -225,8 +220,22 @@ public class AB1Network
     */
    public double trainNetworkOneEpoch()
    {
-      averageError = 0.0;
-      for (int i = 0; i < numCases; i++) 
+      return averageError / numCases;
+   } // trainNetworkOneEpoch()
+
+   /**
+    * Trains the network using the provided training data.
+    * @param trainingInputs Input data for training
+    * @param trainingOutputs Target outputs for training
+    */
+   public void loopTraining()
+   {
+      epochs = 0;
+      averageError = Double.MAX_VALUE;
+      while (epochs < IterationMax && averageError > ECutoff)
+      {
+         averageError = 0.0;
+         for (int i = 0; i < numCases; i++) 
          {
             double[] inputs = trainingInputs[i];
             double target = groundTruths[i];
@@ -234,34 +243,10 @@ public class AB1Network
             averageError += calculateError(target, output);
             train(inputs, target);
          } // for (int i = 0; i < trainingInputs.length; i++)
-      return averageError / numCases;
-   }
-
-   /**
-    * Trains the network using the provided training data.
-    * @param trainingInputs Input data for training
-    * @param trainingOutputs Target outputs for training
-    */
-   public void loopTrainingWithResults()
-   {
-      int epoch = 0;
-      averageError = Double.MAX_VALUE;
-      while (epoch < IterationMax && averageError > ECutoff)
-      {
-         averageError = trainNetworkOneEpoch();
-         epoch++;
-         if (epoch % 1000 == 0)
-            System.out.println("Epoch: " + epoch + ", Average Error: " + averageError);
-      } // while (epoch < IterationMax && averageError > ECutoff)
-      if (epoch == IterationMax)
-      {
-         System.out.println("Warning: Training did not converge to desired error value within " + IterationMax + " iterations. Final error: " + averageError);
-      }
-      else if (averageError <= ECutoff)
-      {
-         System.out.println("Training converged successfully after " + epoch + " iterations. Final error: " + averageError);
-      }
-   }
+         averageError /= numCases;
+         epochs++;
+      } // while (epochs < IterationMax && averageError > ECutoff)
+   } // loopTraining()
 
    /**
     * Performs a single optimization (backpropagation) step to update weights.
@@ -285,8 +270,11 @@ public class AB1Network
          } // for (int k = 0; k < numInputs; k++)
       } // for (int j = 0; j < numHidden; j++)
       applyWeightDeltas();
-   }
+   } // train(double[] inputs, double T)
 
+   /**
+    * Applies the calculated weight deltas to update the network's weights.
+    */
    public void applyWeightDeltas()
    {
       for (int j = 0; j < numHidden; j++)
@@ -297,7 +285,45 @@ public class AB1Network
          }
          w2[j] += layer2Deltas[j][0];
       }
-   }
+   } // applyWeightDeltas()
+
+   /**
+    * Prints the results of the training process, including convergence status and final error.
+    */
+   public void printTrainingResults()
+   {
+      System.out.println("Training Results:");
+      if (epochs == IterationMax)
+      {
+         System.out.println("Warning: Training did not converge to desired error value within " + IterationMax + " iterations. Final error: " + averageError);
+      }
+      else if (averageError <= ECutoff)
+      {
+         System.out.println("Training converged successfully after " + epochs + " iterations. Final error: " + averageError);
+      }
+   } // printTrainingResults()
+
+   /**
+    * Prints the results of the network run.
+    * @param includeInputs Whether to include input values
+    * @param includeGroundTruths Whether to include ground truth values
+    */
+   public void printRunResults(boolean includeInputs, boolean includeGroundTruths)
+   {
+      System.out.println("Run Results:");
+      for (int i = 0; i < numCases; i++)
+      {
+         if (includeInputs)
+         {
+            System.out.print("Inputs: " + java.util.Arrays.toString(trainingInputs[i]) + " ");
+         }
+         if (includeGroundTruths)
+         {
+            System.out.print("Ground Truth: " + groundTruths[i] + " ");
+         }
+         System.out.println("Output: " + networkOutputs[i]);
+      }
+   } // printRunResults(boolean includeInputs, boolean includeGroundTruths)
 
    /**
     * Prints the current weights of the network.
@@ -308,7 +334,7 @@ public class AB1Network
       System.out.println(java.util.Arrays.deepToString(w1));
       System.out.println("Weights from Hidden to Output Layer (w2):");
       System.out.println(java.util.Arrays.toString(w2));
-   }
+   } // printNetworkWeights()
 
    /**
     * Prints the network parameters.
@@ -327,7 +353,7 @@ public class AB1Network
          System.out.println("Max Training Iterations: " + IterationMax);
       }
       printNetworkWeights();
-   }
+   } // printNetworkParameters(boolean training)
 
    /**
     * Main entry point for running the network.
@@ -336,16 +362,17 @@ public class AB1Network
    public static void main(String[] args)
    {
       boolean training = true;
-      boolean manual_weights = false; // Only valid for a 2-2-1 network
+      boolean manualWeights = false; // Only valid for a 2-2-1 network
       boolean runTestCases = true;
       AB1Network p = new AB1Network();
       p.initializeNetworkParams();
       p.allocateNetworkArrays(training);
-      p.populateNetworkArrays(manual_weights);
+      p.populateNetworkArrays(manualWeights);
       p.printNetworkParameters(training);
       if (training)
       {
-         p.loopTrainingWithResults();
+         p.loopTraining();
+         p.printTrainingResults();
       }
       p.run();
       if (runTestCases)
@@ -354,5 +381,5 @@ public class AB1Network
          boolean showGroundTruths = true;
          p.printRunResults(showInputs, showGroundTruths);
       }
-   }
+   } // main(String[] args)
 }
