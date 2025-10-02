@@ -69,10 +69,9 @@ public class AB1Network
          layer2Deltas = new double[numHidden];
       }
 
-      if (showGroundTruths)
-      {
+      if (training | showGroundTruths)
          groundTruths = new double[numCases];
-      }
+      
    } // allocateNetworkArrays(boolean training)
 
 /**
@@ -81,26 +80,16 @@ public class AB1Network
 */
    public void populateNetworkArrays()
    {
-      trainingInputs[0][0] = 0.0;
-      trainingInputs[0][1] = 0.0;
-      trainingInputs[1][0] = 1.0;
-      trainingInputs[1][1] = 0.0;
-      trainingInputs[2][0] = 0.0;
-      trainingInputs[2][1] = 1.0;
-      trainingInputs[3][0] = 1.0;
-      trainingInputs[3][1] = 1.0;
-
-      groundTruths[0] = 0.0;
-      groundTruths[1] = 1.0;
-      groundTruths[2] = 1.0;
-      groundTruths[3] = 0.0; // XOR operation
+      populateInputsAndTruthTable();
 
       if (manualWeights) // Only a valid option for a  2-2-1 network 
       {
          setPredefinedWeights();
       } // if (manualWeights)
       else
+      {
          generateRandomWeights();
+      }
 
    } // populateNetworkArrays(boolean manualWeights)
 
@@ -287,7 +276,8 @@ public class AB1Network
       System.out.println("Training Results:");
 
       if (epochs == IterationMax)
-         System.out.println("Warning: Training did not converge to desired error value within " + IterationMax + " iterations. Final error: " + averageError);
+         System.out.println("Warning: Training did not converge to desired error value within " +
+                            IterationMax + " iterations. Final error: " + averageError);
       
       else if (averageError <= ECutoff)
          System.out.println("Training converged successfully after " + epochs + " iterations. Final error: " + averageError);
@@ -322,14 +312,15 @@ public class AB1Network
    {
       System.out.println("Network Parameters:");
 
-      System.out.println("Number of Inputs: " + numInputs);
+      System.out.println(numInputs  + "-" + numHidden + "-1");
       System.out.println("Number of Hidden Neurons: " + numHidden);
       System.out.println("Number of Outputs: " + numOutputs);
       System.out.println("Learning Rate: " + learningRate);
       System.out.println("Weight Initialization Range: [" + min + ", " + max + "]");
       System.out.println("Activation Function: " + activationName);
 
-      if (training) {
+      if (training) 
+      {
          System.out.println("Number of Training Cases: " + numCases);
          System.out.println("Training Error Cutoff: " + ECutoff);
          System.out.println("Max Training Iterations: " + IterationMax);
@@ -345,12 +336,35 @@ public class AB1Network
    } // printNetworkParameters()
 
 /**
- * Runs the network with hardcoded parameters for demonstration or testing.
-   */
+* Populates the input values and ground truth values for the training set.
+*/
+   public void populateInputsAndTruthTable()
+   {
+      trainingInputs[0][0] = 0.0;
+      trainingInputs[0][1] = 0.0;
+      trainingInputs[1][0] = 1.0;
+      trainingInputs[1][1] = 0.0;
+      trainingInputs[2][0] = 0.0;
+      trainingInputs[2][1] = 1.0;
+      trainingInputs[3][0] = 1.0;
+      trainingInputs[3][1] = 1.0;
+
+      if (training | showGroundTruths)
+      {
+         groundTruths[0] = 0.0;
+         groundTruths[1] = 1.0;
+         groundTruths[2] = 1.0;
+         groundTruths[3] = 0.0;
+      }
+   }
+
+/**
+* Runs the network with hardcoded parameters for demonstration or testing.
+*/
    public void initializeNetworkParams()
    {
       numInputs = 2;
-      numHidden = 5;
+      numHidden = 1;
       numOutputs = 1;
       learningRate = 0.3;
       numCases = 4;
@@ -358,9 +372,6 @@ public class AB1Network
       ECutoff = 0.0002;
       min = -1.5;
       max = 1.5;
-
-      thetaJ = new double[numHidden];
-      h = new double[numHidden];
 
       activationName = "sigmoid";
       activationFunction = ACTIVATION_MAP.get(activationName);
@@ -370,8 +381,7 @@ public class AB1Network
       manualWeights = false; // Only valid for a 2-2-1 network
       runTestCases = true;
       showInputs = true;
-      showGroundTruths = true;
-
+      showGroundTruths = false;
    } // initializeNetworkParams()
 
 /**
