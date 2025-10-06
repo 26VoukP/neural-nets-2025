@@ -1,21 +1,20 @@
 /**
-* Currently, the AB1Network class implements a simple feedforward neural network with one hidden layer and one output.
+* Currently, the ABCNetwork class implements a simple feedforward neural network with one hidden layer and one output.
 * It supports both manual and random weight initialization, training using gradient descent,
 * and evaluation on input data. The network can be configured for different activation functions and learning rates.
 *
 * @author Vouk Praun-Petrovic
 * @version September 9, 2024
 */
-public class AB1Network
+public class ABCNetwork
 {
    public double min, max;
    public double learningRate, ECutoff;
    public int numInputs, numHidden, numOutputs, numLayers;
    public int numCases, IterationMax;
-   public double[][] w1, layer1Deltas;
-   public double[][] trainingInputs;
-   public double[] w2, layer2Deltas, thetaJ, h, groundTruths, networkOutputs;
-   public double thetaI, output, averageError;
+   public double[][] w1, layer1Deltas, w2, layer2Deltas, trainingInputs, networkOutputs;
+   public double[] thetaJ, h, groundTruths, thetaI, f, psiI;
+   public double averageError;
    public int epochs;
    public String activationName;
    public boolean training, manualWeights, runTestCases, showInputs, showGroundTruths;
@@ -55,18 +54,21 @@ public class AB1Network
    public void allocateNetworkArrays()
    {
       trainingInputs = new double[numCases][numInputs];
-      networkOutputs = new double[numCases];
+      networkOutputs = new double[numCases][numOutputs];
 
       w1 = new double[numInputs][numHidden];
       thetaJ = new double[numHidden];
       h = new double[numHidden];
       
-      w2 = new double[numHidden];
+      w2 = new double[numHidden][numOutputs];
+      thetaI = new double[numOutputs];
+      f = new double[numOutputs];
 
       if (training)
       {
+         psiI = new double[numOutputs];
          layer1Deltas = new double[numInputs][numHidden];
-         layer2Deltas = new double[numHidden];
+         layer2Deltas = new double[numHidden][numOutputs];
       }
 
       if (training | showGroundTruths)
@@ -103,8 +105,8 @@ public class AB1Network
       w1[1][0] = -1.0121547995672862;
       w1[1][1] = -1.432402348525032;
 
-      w2[0] = 0.251086609938219;
-      w2[1] = -0.41775164313179797;
+      w2[0][0] = 0.251086609938219;
+      w2[1][0] = -0.41775164313179797;
    } // setPredefinedWeights()
 
 /**
@@ -115,10 +117,18 @@ public class AB1Network
       for (int j = 0; j < numHidden; j++)
       {
          for (int k = 0; k < numInputs; k++)
+         {
             w1[k][j] = generateRandomDouble(min, max);
-
-         w2[j] = generateRandomDouble(min, max);
+         }
       } // for (int j = 0; j < numHidden; j++)
+      
+      for (int i = 0; i < numOutputs; i++)
+      {
+         for (int j = 0; j < numHidden; j++)
+         {
+            w2[j][i] = generateRandomDouble(min, max);
+         }
+      } // for (int i = 0; i < numOutputs; i++)W
    } // generateRandomWeights()
 
 /**
@@ -138,10 +148,16 @@ public class AB1Network
 * @param F Output value
 * @return Error value
 */
-   public static double calculateError(double T, double F)
+   public double calculateError()
    {
-      return (T - F) * (T - F) / 2.0;
-   } // calculateError(double T, double F)
+      double doubleError = 0.0;
+      for (int i = 0; i < numOutputs; i++)
+      {
+         double diff = groundTruths[i] - f[i];
+         doubleError += (diff * diff);
+      }
+      return doubleError / 2.0;
+   } // calculateError()
 
 /**
 * Calculates the activations for the hidden layer neurons.
@@ -158,7 +174,6 @@ public class AB1Network
             sum += w1[k][j] * inputs[k];
          
          thetaJ[j] = sum;
-         h[j] = activationFunction.apply(sum);
       } // for (int j = 0; j < numHidden; j++)
    } // calculateHActivations(double[] inputs)
 
@@ -170,11 +185,15 @@ public class AB1Network
       double sum;
 
       sum = 0.0;
-      for (int j = 0; j < numHidden; j++)
-         sum += w2[j] * h[j];
-      
-      thetaI = sum;
-      output = activationFunction.apply(sum);
+      for (int i = 0; i < numOutputs; i++)
+      {
+         for (int j = 0; j < numHidden; j++)
+         {
+            sum += w2[j][i] * h[j];
+         } 
+         thetaI[i] = sum;
+         f[i] = activationFunction.apply(sum);
+      }
    } // calculateOutput()
 
 /**
@@ -197,7 +216,7 @@ public class AB1Network
       for (int t = 0; t < numCases; t++)
       {
          forwardPass(trainingInputs[t]);
-         networkOutputs[t] = output;
+         networkOutputs[t] = f;
       }
    } // run()
 
@@ -220,7 +239,7 @@ public class AB1Network
 
             forwardPass(inputs);
 
-            averageError += calculateError(target, output);
+            averageError += calculateError();
             train(inputs, target);
          } // for (int t = 0; t < trainingInputs.length; t++)
 
@@ -230,7 +249,7 @@ public class AB1Network
    } // loopTraining()
 
 /**
-* Performs a single optimization (backpropagation) step to update weights.
+* Performs a single optimization step to update weights.
 * @param inputs Input vector
 * @param hiddenLayer Activations of the hidden layer
 * @param output Output of the network
@@ -238,20 +257,25 @@ public class AB1Network
 */
    public void train(double[] inputs, double T)
    {  
-      double deltaOutput = -(T - output) * activationFunctionDerivative.apply(thetaI);
-      for (int j = 0; j < numHidden; j++)
+      for (int i = 0; i < numOutputs; i++)
       {
-         double deltaWeight = -learningRate * deltaOutput * h[j];
-         layer2Deltas[j] = deltaWeight;
-         double deltaHidden = deltaOutput * w2[j] * activationFunctionDerivative.apply(thetaJ[j]);
-         
-         for (int k = 0; k < numInputs; k++) 
+         psiI[i] = -(T - f[i]) * activationFunctionDerivative.apply(thetaI[i]);
+         for (int j = 0; j < numHidden; j++)
          {
-            double deltaWeightInputHidden = -learningRate * deltaHidden * inputs[k];
-            layer1Deltas[k][j] = deltaWeightInputHidden;
-         } // for (int k = 0; k < numInputs; k++)
-      } // for (int j = 0; j < numHidden; j++)
-      applyWeightDeltas();
+            double derivE_Wji = -psiI[i] * h[j];
+            double deltaWji = -learningRate * derivE_Wji;
+            layer2Deltas[j][i] = deltaWji;
+            double omega = psiI[i] * w2[j][i];
+            double psiJ = omega * activationFunctionDerivative.apply(thetaJ[j]);
+            for (int k = 0; k < numInputs; k++)
+            {
+               double derivE_Wkj = -psiJ * inputs[k];
+               double deltaWeightInputHidden = -learningRate * derivE_Wkj;
+               layer1Deltas[k][j] = deltaWeightInputHidden;
+            } // for (int k = 0; k < numInputs; k++)
+         } // for (int j = 0; j < numHidden; j++)
+         applyWeightDeltas();
+      } // for (int i = 0; i < numOutputs; i++)
    } // train(double[] inputs, double T)
 
 /**
@@ -263,9 +287,13 @@ public class AB1Network
       {
          for (int k = 0; k < numInputs; k++)
             w1[k][j] += layer1Deltas[k][j];
-         
-         w2[j] += layer2Deltas[j];
       } // for (int j = 0; j < numHidden; j++)
+
+      for (int i = 0; i < numOutputs; i++)
+      {
+         for (int j = 0; j < numHidden; j++)
+            w2[j][i] += layer2Deltas[j][i];
+      } // for (int i = 0; i < numOutputs; i++)
    } // applyWeightDeltas()
 
 /**
@@ -300,7 +328,7 @@ public class AB1Network
          if (showGroundTruths)
             System.out.print("Ground Truth: " + groundTruths[t] + " ");
 
-         System.out.println("Output: " + networkOutputs[t]);
+         System.out.println("Output: " + java.util.Arrays.toString(networkOutputs[t]));
       } // for (int t = 0; t < numCases; t++)
    } // printRunResults()
 
@@ -356,7 +384,7 @@ public class AB1Network
          groundTruths[2] = 1.0;
          groundTruths[3] = 0.0;
       }
-   }
+   } // populateInputsAndTruthTable()
 
 /**
 * Runs the network with hardcoded parameters for demonstration or testing.
@@ -390,7 +418,7 @@ public class AB1Network
 */
    public static void main(String[] args)
    {
-      AB1Network p = new AB1Network();
+      ABCNetwork p = new ABCNetwork();
 
       p.initializeNetworkParams();
       p.printNetworkParameters();
@@ -409,4 +437,4 @@ public class AB1Network
          p.printRunResults();
       }
    } // main(String[] args)
-} // class AB1Network
+} // class ABCNetwork
