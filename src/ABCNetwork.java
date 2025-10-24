@@ -5,6 +5,28 @@ import com.google.gson.JsonObject;
 * Currently, the ABCNetwork class implements a simple feedforward neural network with one hidden layer and one output.
 * It supports both manual and random weight initialization, training using gradient descent,
 * and evaluation on input data. The network can be configured for different activation functions and learning rates.
+* In order to compile this program, you need to have the gson library installed and add it to the classpath.
+*
+* To compile this program run the following command in the root directory of the project:
+* javac -cp ".;lib\gson-2.10.1.jar" ABCNetwork.java
+*
+* To run this program run the following command in the root directory of the project:
+* java -cp ".;lib\gson-2.10.1.jar" ABCNetwork
+*
+* External Dependencies:
+* This class uses the Gson library (version 2.10.1) by Google for JSON parsing and configuration management.
+* Gson documentation: https://github.com/google/gson
+*
+* Gson classes and methods used:
+* - com.google.gson.Gson: Main class for JSON serialization/deserialization
+*   - fromJson(Reader, Class): Parses JSON from a file reader into Java objects
+* - com.google.gson.JsonObject: Represents a JSON object as a tree of JsonElements
+*   - get(): Retrieves a member by name
+*   - getAsJsonObject(): Gets a nested JSON object
+*   - getAsInt(): Converts element to int
+*   - getAsDouble(): Converts element to double
+*   - getAsString(): Converts element to String
+*   - getAsBoolean(): Converts element to boolean
 *
 * @author Vouk Praun-Petrovic
 * @version September 9, 2024
@@ -20,7 +42,8 @@ public class ABCNetwork
    public double currentError, averageError;
    public int epochs;
    public String activationName;
-   public boolean training, manualWeights, runTestCases, showInputs, showGroundTruths, loadWeightsFromFile, saveWeightsToFile, loadTruthTableFromCSV;
+   public boolean training, manualWeights, runTestCases, showInputs, showGroundTruths;
+   public boolean loadWeightsFromFile, saveWeightsToFile, loadTruthTableFromCSV;
    public String inputWeightsFileName, outputWeightsFileName, inputTableFileName, truthTableFileName;
    public String booleanOperation;
    public long trainTimeMillis;
@@ -34,34 +57,50 @@ public class ABCNetwork
       double apply(double x);
    }
 
-   private static final java.util.HashMap<String, Function> ACTIVATION_MAP = new java.util.HashMap<>();
+   private static final java.util.HashMap<String, Function> ACTIVATION_MAP =
+      new java.util.HashMap<>();
    static
    {
       ACTIVATION_MAP.put("sigmoid", x -> 1.0 / (1.0 + Math.exp(-x)));
-      ACTIVATION_MAP.put("tanh", x -> (Math.exp(x) - Math.exp(-x)) / (Math.exp(x) + Math.exp(-x)));
+      ACTIVATION_MAP.put("tanh", x -> 
+         {
+            double negFactor = (x < 0) ? 1.0 : -1.0;
+            double exp = Math.exp(negFactor * 2 * x);
+            return ((exp - 1.0) / (exp + 1.0)) * negFactor;
+         });
       ACTIVATION_MAP.put("linear", x -> x);
    }
-   private static final java.util.HashMap<String, Function> ACTIVATION_DERIVATIVE_MAP = new java.util.HashMap<>();
+
+
+   private static final java.util.HashMap<String, Function> ACTIVATION_DERIVATIVE_MAP =
+      new java.util.HashMap<>();
    static
    {
-      ACTIVATION_DERIVATIVE_MAP.put("sigmoid", x -> {
-         double fx = ACTIVATION_MAP.get("sigmoid").apply(x);
-         return fx * (1.0 - fx);
-      });
-      ACTIVATION_DERIVATIVE_MAP.put("tanh", x -> 1.0 - ACTIVATION_MAP.get("tanh").apply(x) * ACTIVATION_MAP.get("tanh").apply(x));
+      ACTIVATION_DERIVATIVE_MAP.put("sigmoid", x -> 
+         {
+            double fx = ACTIVATION_MAP.get("sigmoid").apply(x);
+            return fx * (1.0 - fx);
+         });
+      ACTIVATION_DERIVATIVE_MAP.put("tanh", x -> 
+         {
+            double fx = ACTIVATION_MAP.get("tanh").apply(x);
+            return 1.0 - fx * fx;
+         });
       ACTIVATION_DERIVATIVE_MAP.put("linear", x -> 1.0);
    }
 
    public Function activationFunction, activationFunctionDerivative;
 
 /**
-* Runs the network with hardcoded parameters for demonstration or testing.
+* Initializes network parameters by loading configuration from the network-config.json file.
+* Reads network architecture, training parameters, weight settings, execution options, and display settings.
+* @throws java.io.IOException If config file is missing or contains invalid/missing settings
 */
-   public void initializeNetworkParams() throws java.io.IOException
+   public void initializeNetworkParams(String configFileName) throws java.io.IOException
    {
       try 
       {
-         JsonObject json = new Gson().fromJson(new java.io.FileReader("network-config.json"), JsonObject.class);
+         JsonObject json = new Gson().fromJson(new java.io.FileReader(configFileName), JsonObject.class);
          
          JsonObject network = getRequiredObject(json, "network"); // Network architecture parameters
          numInputs = getRequiredInt(network, "numInputs", "network");
@@ -111,7 +150,7 @@ public class ABCNetwork
 * @return The required JSON object
 * @throws java.io.IOException If the required JSON object is not found
 */
-   private JsonObject getRequiredObject(JsonObject parent, String key) throws java.io.IOException
+   private static JsonObject getRequiredObject(JsonObject parent, String key) throws java.io.IOException
    {
       if (parent.get(key) == null) 
       {
@@ -120,7 +159,15 @@ public class ABCNetwork
       return parent.getAsJsonObject(key);
    } // getRequiredObject(JsonObject parent, String key)
 
-   private int getRequiredInt(JsonObject obj, String key, String section) throws java.io.IOException
+/**
+* Gets a required integer from a JSON object.
+* @param obj The JSON object
+* @param key The key of the required integer
+* @param section The section of the JSON object
+* @return The required integer
+* @throws java.io.IOException If the required integer is not found
+*/
+   private static int getRequiredInt(JsonObject obj, String key, String section) throws java.io.IOException
    {
       if (obj.get(key) == null) 
       {
@@ -129,7 +176,15 @@ public class ABCNetwork
       return obj.get(key).getAsInt();
    } // getRequiredInt(JsonObject obj, String key, String section)
 
-   private double getRequiredDouble(JsonObject obj, String key, String section) throws java.io.IOException
+/**
+* Gets a required double from a JSON object.
+* @param obj The JSON object
+* @param key The key of the required double
+* @param section The section of the JSON object
+* @return The required double
+* @throws java.io.IOException If the required double is not found
+*/
+   private static double getRequiredDouble(JsonObject obj, String key, String section) throws java.io.IOException
    {
       if (obj.get(key) == null) 
       {
@@ -138,7 +193,15 @@ public class ABCNetwork
       return obj.get(key).getAsDouble();
    } // getRequiredDouble(JsonObject obj, String key, String section)
 
-   private String getRequiredString(JsonObject obj, String key, String section) throws java.io.IOException
+/**
+* Gets a required string from a JSON object.
+* @param obj The JSON object
+* @param key The key of the required string
+* @param section The section of the JSON object
+* @return The required string
+* @throws java.io.IOException If the required string is not found
+*/
+   private static String getRequiredString(JsonObject obj, String key, String section) throws java.io.IOException
    {
       if (obj.get(key) == null) 
       {
@@ -147,7 +210,15 @@ public class ABCNetwork
       return obj.get(key).getAsString();
    } // getRequiredString(JsonObject obj, String key, String section)
 
-   private boolean getRequiredBoolean(JsonObject obj, String key, String section) throws java.io.IOException
+/**
+* Gets a required boolean from a JSON object.
+* @param obj The JSON object
+* @param key The key of the required boolean
+* @param section The section of the JSON object
+* @return The required boolean
+* @throws java.io.IOException If the required boolean is not found
+*/
+   private static boolean getRequiredBoolean(JsonObject obj, String key, String section) throws java.io.IOException
    {
       if (obj.get(key) == null) 
       {
@@ -181,7 +252,7 @@ public class ABCNetwork
       {
          groundTruths = new double[numCases][numOutputs];
       }
-   } // allocateNetworkArrays(boolean training)
+   } // allocateNetworkArrays()
 
 /**
 * Populates the network's weight arrays either with manual values or random values.
@@ -209,8 +280,7 @@ public class ABCNetwork
       {
          generateRandomWeights();
       }
-
-   } // populateNetworkArrays(boolean manualWeights)
+   } // populateNetworkArrays()
 
 /**
 * Sets predefined weights for the network.
@@ -231,60 +301,59 @@ public class ABCNetwork
 /**
 * Populates the input values and ground truth values for the training set.
 */
-@SuppressWarnings("ConvertToStringSwitch")
-public void manuallySetInputsAndTruthTable()
-{
-   trainingInputs[0][0] = 0.0;
-   trainingInputs[0][1] = 0.0;
-   trainingInputs[1][0] = 1.0;
-   trainingInputs[1][1] = 0.0;
-   trainingInputs[2][0] = 0.0;
-   trainingInputs[2][1] = 1.0;
-   trainingInputs[3][0] = 1.0;
-   trainingInputs[3][1] = 1.0;
+   public void manuallySetInputsAndTruthTable()
+   {
+      trainingInputs[0][0] = 0.0;
+      trainingInputs[0][1] = 0.0;
+      trainingInputs[1][0] = 1.0;
+      trainingInputs[1][1] = 0.0;
+      trainingInputs[2][0] = 0.0;
+      trainingInputs[2][1] = 1.0;
+      trainingInputs[3][0] = 1.0;
+      trainingInputs[3][1] = 1.0;
 
-   if (!booleanOperation.equals("CUSTOM"))
-   {
-      if (training || showGroundTruths)
+      if (!booleanOperation.equals("CUSTOM"))
       {
-         if (booleanOperation.equals("OR"))
+         if (training || showGroundTruths)
          {
-            groundTruths[0][0] = 0.0;
-            groundTruths[1][0] = 1.0;
-            groundTruths[2][0] = 1.0;
-            groundTruths[3][0] = 1.0;
-         }
-         else if (booleanOperation.equals("AND"))
-         {
-            groundTruths[0][0] = 0.0;
-            groundTruths[1][0] = 0.0;
-            groundTruths[2][0] = 0.0;
-            groundTruths[3][0] = 1.0;
-         }
-         else if (booleanOperation.equals("XOR"))
-         {
-            groundTruths[0][0] = 0.0;
-            groundTruths[1][0] = 1.0;
-            groundTruths[2][0] = 1.0;
-            groundTruths[3][0] = 0.0;
-         }
-         else 
-         {
-            throw new IllegalArgumentException("Error populating truth table for '" + booleanOperation + "' operation.");
-         }
-      } // if (training || showGroundTruths)
-   } // if (!booleanOperation.equals("CUSTOM"))
-   else
-   {
-      if (training || showGroundTruths)
+            switch (booleanOperation)
+            {
+               case "OR" ->
+               {
+                  groundTruths[0][0] = 0.0;
+                  groundTruths[1][0] = 1.0;
+                  groundTruths[2][0] = 1.0;
+                  groundTruths[3][0] = 1.0;
+               }
+               case "AND" ->
+               {
+                  groundTruths[0][0] = 0.0;
+                  groundTruths[1][0] = 0.0;
+                  groundTruths[2][0] = 0.0;
+                  groundTruths[3][0] = 1.0;
+               }
+               case "XOR" ->
+               {
+                  groundTruths[0][0] = 0.0;
+                  groundTruths[1][0] = 1.0;
+                  groundTruths[2][0] = 1.0;
+                  groundTruths[3][0] = 0.0;
+               }
+               default -> throw new IllegalArgumentException("Error populating truth table for '" + booleanOperation + "' operation.");
+            } // switch (booleanOperation)
+         } // if (training || showGroundTruths)
+      } // if (!booleanOperation.equals("CUSTOM"))
+      else
       {
-         groundTruths[0][0] = 0.0;  groundTruths[0][1] = 0.0;  groundTruths[0][2] = 0.0;
-         groundTruths[1][0] = 0.0;  groundTruths[1][1] = 1.0;  groundTruths[1][2] = 1.0;
-         groundTruths[2][0] = 0.0;  groundTruths[2][1] = 1.0;  groundTruths[2][2] = 1.0;
-         groundTruths[3][0] = 1.0;  groundTruths[3][1] = 1.0;  groundTruths[3][2] = 0.0;
-      }
-   } // else
-} // manuallySetInputsAndTruthTable()
+         if (training || showGroundTruths)
+         {
+            groundTruths[0][0] = 0.0;  groundTruths[0][1] = 0.0;  groundTruths[0][2] = 0.0;
+            groundTruths[1][0] = 0.0;  groundTruths[1][1] = 1.0;  groundTruths[1][2] = 1.0;
+            groundTruths[2][0] = 0.0;  groundTruths[2][1] = 1.0;  groundTruths[2][2] = 1.0;
+            groundTruths[3][0] = 1.0;  groundTruths[3][1] = 1.0;  groundTruths[3][2] = 0.0;
+         }
+      } // else
+   } // manuallySetInputsAndTruthTable()
 
 /**
 * Loads the input and truth table from a CSV file.
@@ -292,11 +361,11 @@ public void manuallySetInputsAndTruthTable()
 * @param groundTruths The truth data
 * @throws java.io.IOException If the input or truth table is not found
 */
-public void loadInputsAndTruthTable() throws java.io.IOException
-{
-   loadDoubleArrfromCSV(trainingInputs, numCases, numInputs, inputTableFileName); // Load the input data
-   loadDoubleArrfromCSV(groundTruths, numCases, numOutputs, truthTableFileName); // Load the truth data
-} // loadInputsAndTruthTable()
+   public void loadInputsAndTruthTable() throws java.io.IOException
+   {
+      loadDoubleArrfromCSV(trainingInputs, numCases, numInputs, inputTableFileName); // Load the input data
+      loadDoubleArrfromCSV(groundTruths, numCases, numOutputs, truthTableFileName); // Load the truth data
+   } // loadInputsAndTruthTable()
 
 /**
 * Loads a double array from a CSV file.
@@ -306,43 +375,43 @@ public void loadInputsAndTruthTable() throws java.io.IOException
 * @param filename The name of the CSV file
 * @throws java.io.IOException If the array is not found
 */
-public static void loadDoubleArrfromCSV(double[][] arr, int arrRows, int arrCols, String filename) throws java.io.IOException
-{
-   try (java.io.BufferedReader reader = new java.io.BufferedReader(new java.io.FileReader(filename)))
+   public static void loadDoubleArrfromCSV(double[][] arr, int arrRows, int arrCols, String filename) throws java.io.IOException
    {
-      String line = reader.readLine(); // Requires first line to be the dimensions of the rest of theCSV
-      int numRows = Integer.parseInt(line.split(",")[0]);
-      int numCols = Integer.parseInt(line.split(",")[1]);
-      String[] values;
-
-      if (numRows != arrRows || numCols != arrCols)
+      try (java.io.BufferedReader reader = new java.io.BufferedReader(new java.io.FileReader(filename)))
       {
-         throw new java.io.IOException("Error: CSV '" + filename + "' has invalid dimensions. Expected " + arrRows + "x" + arrCols + 
-            " but found " + numRows + "x" + numCols + ".");
-      } // if (numRows != arrRows || numCols != arrCols)
+         String line = reader.readLine(); // Requires first line to be the dimensions of the rest of theCSV
+         int numRows = Integer.parseInt(line.split(",")[0]);
+         int numCols = Integer.parseInt(line.split(",")[1]);
+         String[] values;
 
-      for (int r = 0; r < numRows; r++)
-      {
-         line = reader.readLine();
-         values = line.split(",");
-         for (int c = 0; c < numCols; c++)
+         if (numRows != arrRows || numCols != arrCols)
          {
-            try
+            throw new java.io.IOException("Error: CSV '" + filename + "' has invalid dimensions. Expected " + arrRows + "x" + arrCols + 
+               " but found " + numRows + "x" + numCols + ".");
+         } // if (numRows != arrRows || numCols != arrCols)
+
+         for (int r = 0; r < numRows; r++)
+         {
+            line = reader.readLine();
+            values = line.split(",");
+            for (int c = 0; c < numCols; c++)
             {
-               arr[r][c] = Double.parseDouble(values[c].trim());
-            }
-            catch (NumberFormatException e)
-            {
-               throw new java.io.IOException("Error: Invalid number '" + values[c] + "' at row " + r + ", column " + c);
-            }
-         } // for (int c = 0; c < numCols; c++)
-      } // for (int r = 0; r < numRows; r++)
-   }  // try (java.io.BufferedReader reader = new java.io.BufferedReader(new java.io.FileReader(filename)))
-   catch (java.io.FileNotFoundException e)
-   {
-      throw new java.io.IOException("Error: " + filename + " file not found.");
-   }
-} // loadDoubleArrfromCSV(double[][] arr, int arrRows, int arrCols, String filename)
+               try
+               {
+                  arr[r][c] = Double.parseDouble(values[c].trim());
+               }
+               catch (NumberFormatException e)
+               {
+                  throw new java.io.IOException("Error: Invalid number '" + values[c] + "' at row " + r + ", column " + c);
+               }
+            } // for (int c = 0; c < numCols; c++)
+         } // for (int r = 0; r < numRows; r++)
+      }  // try (java.io.BufferedReader reader = new java.io.BufferedReader(new java.io.FileReader(filename)))
+      catch (java.io.FileNotFoundException e)
+      {
+         throw new java.io.IOException("Error: " + filename + " file not found.");
+      }
+   } // loadDoubleArrfromCSV(double[][] arr, int arrRows, int arrCols, String filename)
 
 
 /**
@@ -360,7 +429,7 @@ public static void loadDoubleArrfromCSV(double[][] arr, int arrRows, int arrCols
 
          if (fileNumInputs != numInputs || fileNumHidden != numHidden) 
          {
-            throw new IndexOutOfBoundsException("Warning: File dimensions for w1 (" + fileNumInputs + "-" + fileNumHidden +
+            throw new java.io.IOException("Error: File dimensions for w1 (" + fileNumInputs + "-" + fileNumHidden +
                                ") do not match network (" + numInputs + "-" + numHidden + ")"); 
          }
 
@@ -405,8 +474,7 @@ public static void loadDoubleArrfromCSV(double[][] arr, int arrRows, int arrCols
             new java.io.FileOutputStream(outputWeightsFileName))
       ) 
       {
-
-         out.writeInt(numInputs);    // saves dimensions of network to the file
+         out.writeInt(numInputs); // saves dimensions of network to the file
          out.writeInt(numHidden);
 
          for (int k = 0; k < numInputs; k++) 
@@ -453,7 +521,7 @@ public static void loadDoubleArrfromCSV(double[][] arr, int arrRows, int arrCols
          {
             w2[j][i] = generateRandomDouble(min, max);
          }
-      } // for (int i = 0; i < numOutputs; i++)W
+      } // for (int i = 0; i < numOutputs; i++)
    } // generateRandomWeights()
 
 /**
@@ -621,8 +689,7 @@ public static void loadDoubleArrfromCSV(double[][] arr, int arrRows, int arrCols
                             IterationMax + " iterations. Final error: " + averageError);
       
       else if (averageError <= ECutoff)
-         System.out.println("Training converged successfully after " + epochs + " iterations. Final error: " + averageError);
-      
+         System.out.println("Training converged successfully after " + epochs + " iterations. Final error: " + averageError); 
    } // printTrainingResults()
 
 /**
@@ -664,13 +731,13 @@ public static void loadDoubleArrfromCSV(double[][] arr, int arrRows, int arrCols
          System.out.println("Number of Training Cases: " + numCases);
          System.out.println("Training Error Cutoff: " + ECutoff);
          System.out.println("Max Training Iterations: " + IterationMax);
-      }
+      } // if (training)
       
       System.out.println("\nWeights Initialization:");
       System.out.println("Weight Initialization Range: [" + min + ", " + max + "]");
       System.out.println("Manual Weights: " + manualWeights);
-      System.out.println("Load Weights from" + inputWeightsFileName + ": " + loadWeightsFromFile);
-      System.out.println("Save Weights to" + outputWeightsFileName + ": " + saveWeightsToFile);
+      System.out.println("Load Weights from " + inputWeightsFileName + ": " + loadWeightsFromFile);
+      System.out.println("Save Weights to " + outputWeightsFileName + ": " + saveWeightsToFile);
 
       System.out.println("\nConfiguration Booleans:");
       System.out.println("Run Test Cases: " + runTestCases);
@@ -679,7 +746,7 @@ public static void loadDoubleArrfromCSV(double[][] arr, int arrRows, int arrCols
 
       System.out.println("Display Configuration:");
       System.out.println("Show Inputs: " + showInputs);
-      System.out.println("Show Ground Truths: " + showGroundTruths);
+      System.out.println("Show Ground Truths: " + showGroundTruths + "\n");
    } // printNetworkParameters()
 
 /**
@@ -718,10 +785,11 @@ public static void loadDoubleArrfromCSV(double[][] arr, int arrRows, int arrCols
    public static void main(String[] args)
    {
       ABCNetwork p = new ABCNetwork();
+      String configFileName = "network-config.json";
 
       try
       {
-         p.initializeNetworkParams();
+         p.initializeNetworkParams(configFileName);
          p.printNetworkParameters();
          p.allocateNetworkArrays();
 

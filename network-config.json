@@ -2,8 +2,8 @@
   "network": {
     "numInputs": 2,
     "numHidden": 5,
-    "numOutputs": 3,
-    "activationName": "sigmoid"
+    "numOutputs": 1,
+    "activationName": "tanh"
   },
   "training": {
     "learningRate": 0.3,

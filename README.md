@@ -62,27 +62,18 @@ If you prefer not to use the scripts:
 ```bash
 # Windows
 javac -cp "lib\gson-2.10.1.jar" -d bin src\ABCNetwork.java
-or 
-compile
 
 # Linux/macOS
 javac -cp "lib/gson-2.10.1.jar" -d bin src/ABCNetwork.java
-or 
-chmod +x compile.sh run.sh
-./compile.sh
 ```
 
 **Run:**
 ```bash
 # Windows
 java -cp "bin;lib\gson-2.10.1.jar" ABCNetwork
-or
-run
 
 # Linux/macOS
 java -cp "bin:lib/gson-2.10.1.jar" ABCNetwork
-or
-./run.sh
 ```
 
 ## Configuration
