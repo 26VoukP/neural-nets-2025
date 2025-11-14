@@ -43,3 +43,6 @@ __pycache__/
 *.swp
 *~
 *.bin
+
+# ignore Gson stub files, they are just a workaround for my editor to not complain about the Gson dependency
+src/com

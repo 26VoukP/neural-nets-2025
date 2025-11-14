@@ -1,5 +1,5 @@
 @echo off
-javac -cp "src\lib\gson-2.10.1.jar" -d bin src\ABCNetwork.java
+javac -cp "lib\gson-2.10.1.jar" -d bin src\ABCDNetwork.java
 if %errorlevel% == 0 (
     echo Compilation successful!
 ) else (
