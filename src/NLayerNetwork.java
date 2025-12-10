@@ -1,10 +1,11 @@
 import com.google.gson.Gson;
+import com.google.gson.JsonArray;
 import com.google.gson.JsonObject;
 import java.math.BigDecimal;
 import java.math.RoundingMode;
 
 /*
-* ABCDNetwork implements a configurable feedforward neural network with two hidden layers.
+* NLayerNetwork implements a configurable feedforward neural network with a configurable number of layers.
 * It supports manual or random weight initialization, supervised training via backpropagation, and evaluation on
 * arbitrary input tables. Activation function, learning rate, dataset source, and several runtime toggles are all
 * driven through a JSON configuration file.
@@ -20,27 +21,27 @@ import java.math.RoundingMode;
 * Author: Vouk Praun-Petrovic
 * Created: September 9, 2024
 */
-public class ABCDNetwork
+public class NLayerNetwork
 {
    public double min, max;
    public double learningRate, ECutoff;
-   public int numActivationLayers, numInputs, numHidden1, numHidden2, numOutputs;
-   public int numCases, IterationMax, epochs;
+   public int numActivationLayers, numInputs, numOutputs;
+   public int[] layerSizes;
+   public int numCases, IterationMax, epochs, keepAlive;
    public double[][][] w;
    public double[][] a, inputTable, networkOutputs, groundTruths, psi, theta;
    public double[] targets;
    public double averageError;
    public String activationName;
-   public boolean training, manualWeights, runTestCases, showInputs, showGroundTruths;
-   public boolean loadWeightsFromFile, saveWeightsToFile, loadTruthTableFromCSV;
+   public boolean training, runTestCases, showInputs, showGroundTruths;
+   public boolean loadWeightsFromFile, saveWeightsToFile;
    public String inputWeightsFileName, outputWeightsFileName, inputTableFileName, truthTableFileName;
    public String booleanOperation;
    public long trainStartTimeMillis, runStartTimeMillis, trainEndTimeMillis, runEndTimeMillis;
-   public static final int INPUT_INEDX = 0;
+   public static final int INPUT_INDEX = 0;
    public static final int HIDDEN1_INDEX = 1;
    public static final int HIDDEN2_INDEX = 2;
-   public static final int OUTPUT_INDEX = 3;
-   public static final String DEFAULT_CONFIG_FILE = "network-config.json";
+   public String configFileName = "network-config.json";
 
 /*
 * Functional interface for activation functions and their derivatives.
@@ -63,7 +64,7 @@ public class ABCDNetwork
             return ((exp - 1.0) / (exp + 1.0)) * negFactor;
          });
       ACTIVATION_MAP.put("linear", x -> x);
-   }
+   } // java.util.HashMap<String, Function> ACTIVATION_MAP
 
 
    private static final java.util.HashMap<String, Function> ACTIVATION_DERIVATIVE_MAP =
@@ -81,30 +82,37 @@ public class ABCDNetwork
             return 1.0 - fx * fx;
          });
       ACTIVATION_DERIVATIVE_MAP.put("linear", x -> 1.0);
-   }
-
+   } // java.util.HashMap<String, Function> ACTIVATION_DERIVATIVE_MAP
    public Function activationFunction, activationFunctionDerivative;
 
 /*
 * Initializes network parameters from a JSON configuration file.
 * Reads network architecture, training parameters, weight settings, execution flags, and display preferences.
-* If configFileName is null, DEFAULT_CONFIG_FILE is used.
+* If commandLineConfigFileName is null, the default configFileName field value is used.
 * Throws java.io.IOException when the file cannot be read or required settings are missing.
 */
-   public void initializeNetworkParams(String configFileName) throws java.io.IOException
+   public void initializeNetworkParams(String commandLineConfigFileName) throws java.io.IOException
    {
       try 
       {
-         numActivationLayers = 4; // Will later be read in from config file in this section when N-layer is implemented 
+         if (commandLineConfigFileName != null)
+         {
+            configFileName = commandLineConfigFileName;
+         }
 
-         JsonObject json = new Gson().fromJson(new java.io.FileReader(configFileName == null ? DEFAULT_CONFIG_FILE : configFileName), JsonObject.class);
+         JsonObject json = new Gson().fromJson(new java.io.FileReader(configFileName), JsonObject.class);
          
          String networkSectionHeader = "network";
          JsonObject network = getRequiredObject(json, networkSectionHeader); // Network architecture parameters
-         numInputs = getRequiredInt(network, "numInputs", networkSectionHeader);
-         numHidden1 = getRequiredInt(network, "numHidden1", networkSectionHeader);
-         numHidden2 = getRequiredInt(network, "numHidden2", networkSectionHeader);
-         numOutputs = getRequiredInt(network, "numOutputs", networkSectionHeader);
+         numActivationLayers = getRequiredInt(network, "numActivationLayers", networkSectionHeader);
+         layerSizes = getRequiredIntArray(network, "layerSizes", networkSectionHeader);
+         if (layerSizes.length != numActivationLayers)
+         {
+            throw new java.io.IOException("Mismatch between number of activation layers and activation layer size list.");
+         }
+         numInputs = layerSizes[0]; // Named numInputs since it's used so often
+         numOutputs = layerSizes[numActivationLayers - 1]; // Named numOutputs since it's used so often
+
          activationName = getRequiredString(network, "activationName", networkSectionHeader);
          activationFunction = ACTIVATION_MAP.get(activationName);
          activationFunctionDerivative = ACTIVATION_DERIVATIVE_MAP.get(activationName);
@@ -115,17 +123,16 @@ public class ABCDNetwork
          ECutoff = getRequiredDouble(trainingParams, "ECutoff", trainingSectionHeader);
          IterationMax = getRequiredInt(trainingParams, "IterationMax", trainingSectionHeader);
          numCases = getRequiredInt(trainingParams, "numCases", trainingSectionHeader);
+         keepAlive = getRequiredInt(trainingParams, "keepAlive", trainingSectionHeader);
 
          String arraySectionHeader = "arrayParameters";
          JsonObject arrParams = getRequiredObject(json, arraySectionHeader); // Array initialization parameters
          min = getRequiredDouble(arrParams, "min", arraySectionHeader);
          max = getRequiredDouble(arrParams, "max", arraySectionHeader);
-         manualWeights = getRequiredBoolean(arrParams, "manualWeights", arraySectionHeader);
          loadWeightsFromFile = getRequiredBoolean(arrParams, "loadWeightsFromFile", arraySectionHeader);
          saveWeightsToFile = getRequiredBoolean(arrParams, "saveWeightsToFile", arraySectionHeader);
          inputWeightsFileName = getRequiredString(arrParams, "inputWeightsFileName", arraySectionHeader);
          outputWeightsFileName = getRequiredString(arrParams, "outputWeightsFileName", arraySectionHeader);
-         loadTruthTableFromCSV = getRequiredBoolean(arrParams, "loadTruthTableFromCSV", arraySectionHeader);
          inputTableFileName = getRequiredString(arrParams, "inputTableFileName", arraySectionHeader);
          truthTableFileName = getRequiredString(arrParams, "truthTableFileName", arraySectionHeader);
 
@@ -212,6 +219,25 @@ public class ABCDNetwork
    } // getRequiredBoolean(JsonObject obj, String key, String section)
 
 /*
+* Reads a required integer array from the provided JsonObject.
+* Throws java.io.IOException with the section name when the key is missing or the array is invalid.
+*/
+   private static int[] getRequiredIntArray(JsonObject obj, String key, String section) throws java.io.IOException
+   {
+      if (obj.get(key) == null) 
+      {
+         throw new java.io.IOException("Missing required setting '" + key + "' in section '" + section + "'");
+      }
+      JsonArray jsonArray = obj.get(key).getAsJsonArray();
+      int[] result = new int[jsonArray.size()];
+      for (int i = 0; i < jsonArray.size(); i++)
+      {
+         result[i] = jsonArray.get(i).getAsInt();
+      }
+      return result;
+   } // getRequiredIntArray(JsonObject obj, String key, String section)
+
+/*
 * Allocates activations, weights, and optional buffers using the configured layer sizes and runtime flags.
 * Call after initializeNetworkParams so dimensions and booleans are populated.
 */
@@ -220,128 +246,60 @@ public class ABCDNetwork
       inputTable = new double[numCases][numInputs];
       networkOutputs = new double[numCases][numOutputs];
 
-      w = new double[numActivationLayers - 1][][]; // -1 since there's no output layer weight array
-      w[INPUT_INEDX] = new double[numInputs][numHidden1];
-      w[HIDDEN1_INDEX] = new double[numHidden1][numHidden2];
-      w[HIDDEN2_INDEX] = new double[numHidden2][numOutputs]; // the n-index corresponds to the layer the weights operate on
-
-      a = new double[numActivationLayers][Math.max(Math.max(numHidden1, numHidden2), numOutputs)]; // inputs are assigned as pointer to a[0]
+      w = new double[numActivationLayers - 1][][]; // w[0] is empty, w[1] operates on input layer, etc
+      for (int n = 0; n < numActivationLayers - 1; n++)
+      {
+         w[n] = new double[layerSizes[n]][layerSizes[n + 1]]; // the n-index corresponds to the layer the weights output
+      }
+      a = new double[numActivationLayers][arrMax(layerSizes, 1, numActivationLayers)]; // inputs are assigned as pointer to a[0]
 
       if (training)
       {
-         psi = new double[numActivationLayers][Math.max(numHidden1, Math.max(numHidden2, numOutputs))];  // one psi array for each layer
-         theta = new double[numActivationLayers - 1][Math.max(numHidden1, numHidden2)]; // -1 since there's no output layer theta 
+         psi = new double[numActivationLayers][arrMax(layerSizes, 1, numActivationLayers)];  // one psi array for each layer
+         theta = new double[numActivationLayers - 1][arrMax(layerSizes, 1, numActivationLayers - 1)]; // -1 since there's no output layer theta 
       }
 
       if (training | showGroundTruths)
       {
-         groundTruths = new double[numCases][numOutputs];
+         groundTruths = new double[numCases][layerSizes[numActivationLayers - 1]];
       }
    } // allocateNetworkArrays()
 
+/** 
+* Finds the maximum value in an integer array between start and end indices.
+* Returns the maximum value found.
+*/
+   public static int arrMax(int[] arr, int start, int end)
+   {
+      int max = Integer.MIN_VALUE;
+      for (int index = start; index < end; index++)
+      {
+         if (arr[index] > max)
+         {
+            max = arr[index];
+         }
+      }
+      return max;
+   } // arrMax(int[] arr, int start, int end)
+
 /*
 * Populates network data structures by loading inputs/targets and initializing weights per configuration.
-* Files are read when loadTruthTableFromCSV or loadWeightsFromFile are true; otherwise defaults or random values are used.
+* Files are read when loadWeightsFromFile is true; otherwise random values are used.
 * Throws java.io.IOException when required CSV or weight files are missing or malformed.
 */
    public void populateNetworkArrays() throws java.io.IOException
    {
-      if (loadTruthTableFromCSV)
-      {
-         loadInputsAndTruthTable();
-      }
-      else
-      {
-         manuallySetInputsAndTruthTable();
-      }
+      loadInputsAndTruthTable();
 
       if (loadWeightsFromFile)
       {
          loadWeightsFromFile();
-      }
-      else if (manualWeights) // Only a valid option for a  2-2-1 network 
-      {
-         setPredefinedWeights();
       }
       else
       {
          generateRandomWeights();
       }
    } // populateNetworkArrays()
-
-/*
-* Sets deterministic weights for the hand-crafted demonstration network.
-* Only valid when the configured architecture matches the hard-coded dimensions.
-*/
-   public void setPredefinedWeights()
-   {
-      w[INPUT_INEDX][0][0] = 0.9404045278126735;
-      w[INPUT_INEDX][0][1] = -1.0121547995672862;
-      w[INPUT_INEDX][1][0] = 0.2241493210468354;
-      w[INPUT_INEDX][1][1] = -1.432402348525032;
-
-      w[HIDDEN1_INDEX][0][0] = 0.251086609938219;
-      w[HIDDEN1_INDEX][1][0] = -0.41775164313179797;
-   } // setPredefinedWeights()
-
-
-/*
-* Populates the built-in input table and truth table for the configured boolean operation.
-* When booleanOperation is CUSTOM, fills the multi-output truth table; otherwise enforces single-output logic.
-*/
-   public void manuallySetInputsAndTruthTable()
-   {
-      inputTable[0][0] = 0.0;
-      inputTable[0][1] = 0.0;
-      inputTable[1][0] = 1.0;
-      inputTable[1][1] = 0.0;
-      inputTable[2][0] = 0.0;
-      inputTable[2][1] = 1.0;
-      inputTable[3][0] = 1.0;
-      inputTable[3][1] = 1.0;
-
-      if (!booleanOperation.equals("CUSTOM"))
-      {
-         if (training || showGroundTruths)
-         {
-            switch (booleanOperation)
-            {
-               case "OR" ->
-               {
-                  groundTruths[0][0] = 0.0;
-                  groundTruths[1][0] = 1.0;
-                  groundTruths[2][0] = 1.0;
-                  groundTruths[3][0] = 1.0;
-               }
-               case "AND" ->
-               {
-                  groundTruths[0][0] = 0.0;
-                  groundTruths[1][0] = 0.0;
-                  groundTruths[2][0] = 0.0;
-                  groundTruths[3][0] = 1.0;
-               }
-               case "XOR" ->
-               {
-                  groundTruths[0][0] = 0.0;
-                  groundTruths[1][0] = 1.0;
-                  groundTruths[2][0] = 1.0;
-                  groundTruths[3][0] = 0.0;
-               }
-               default -> throw new IllegalArgumentException("Error populating truth table for '" + booleanOperation + "' operation.");
-            } // switch (booleanOperation)
-         } // if (training || showGroundTruths)
-      } // if (!booleanOperation.equals("CUSTOM"))
-      else
-      {
-         if (training || showGroundTruths)
-         {
-            groundTruths[0][0] = 0.0;  groundTruths[0][1] = 0.0;  groundTruths[0][2] = 0.0;
-            groundTruths[1][0] = 0.0;  groundTruths[1][1] = 1.0;  groundTruths[1][2] = 1.0;
-            groundTruths[2][0] = 0.0;  groundTruths[2][1] = 1.0;  groundTruths[2][2] = 1.0;
-            groundTruths[3][0] = 1.0;  groundTruths[3][1] = 1.0;  groundTruths[3][2] = 0.0;
-         }
-      } // else
-   } // manuallySetInputsAndTruthTable()
 
 /*
 * Loads the input and truth tables from CSV files specified in the configuration.
@@ -408,57 +366,28 @@ public class ABCDNetwork
             new java.io.FileInputStream(inputWeightsFileName))
       )
       {
+         int layerInputDim;
+         int layerOutputDim;
 
-         int fileNumInputs = in.readInt();
-         int fileNumHidden1 = in.readInt();
-         
-         if (fileNumInputs != numInputs || fileNumHidden1 != numHidden1) 
+         for (int n = 1; n < numActivationLayers; n++) // N starts at 1 less weight layer than activations
          {
-            throw new java.io.IOException("Error: File dimensions for layer 1 weights (" + fileNumInputs + "-" + fileNumHidden1 +
-                               ") do not match network (" + numInputs + "-" + numHidden1 + ")"); 
-         }
+            layerInputDim = in.readInt();
+            layerOutputDim = in.readInt();
 
-         for (int m = 0; m < numInputs; m++) 
-         {
-            for (int k = 0; k < numHidden1; k++) 
+            if (layerInputDim != layerSizes[n - 1] || layerOutputDim != layerSizes[n])
             {
-               w[INPUT_INEDX][m][k] = in.readDouble();
+               throw new java.io.IOException("Error: File dimensions for layer " + n + " weights (" + layerInputDim
+                   + "-" + layerOutputDim +") do not match network (" + layerSizes[n - 1] + "-" + layerSizes[n] + ")"); 
             }
-         } // for (int m = 0; m < numInputs; m++)
 
-         fileNumHidden1 = in.readInt();
-         int fileNumHidden2 = in.readInt();
-
-         if (fileNumHidden1 != numHidden1 || fileNumHidden2 != numHidden2) 
-         {
-            throw new java.io.IOException("Error: File dimensions for layer 2 weights (" + fileNumInputs + "-" + fileNumHidden1 +
-                               ") do not match network (" + numInputs + "-" + numHidden1 + ")"); 
-         }
-
-         for (int k = 0; k < numHidden1; k++) 
-         {
-            for (int j = 0; j < numHidden2; j++) 
+            for (int input = 0; input < layerSizes[n - 1]; input++)
             {
-               w[HIDDEN1_INDEX][k][j] = in.readDouble();
-            }
-         } // for (int k = 0; k < numHidden1; k++)
-
-         fileNumHidden2 = in.readInt(); // Read and check dimensions for w[HIDDEN2_INDEX]
-         int fileNumOutputs = in.readInt();
-
-         if (fileNumHidden2 != numHidden2 || fileNumOutputs != numOutputs) 
-         {
-            throw new IndexOutOfBoundsException("Error: File dimensions for w[HIDDEN2_INDEX] (" + fileNumHidden2 + "-" + fileNumOutputs +
-                               ") do not match network (" + numHidden2 + "-" + numOutputs + ")");
-         }
-
-         for (int j = 0; j < numHidden2; j++) 
-         {
-            for (int i = 0; i < numOutputs; i++) 
-            {
-               w[HIDDEN2_INDEX][j][i] = in.readDouble();
-            }
-         } // for (int j = 0; j < numHidden2; j++)
+               for (int output = 0; output < layerSizes[n]; output++)
+               {
+                  w[n - 1][input][output] = in.readDouble();
+               }
+            } // for (int input = 0; input < layerSizes[n - 1]; input++)
+         } // for (int n = 1; n < numActivationLayers; n++)
       } // try()
       catch (java.io.IOException e) 
       {
@@ -477,38 +406,19 @@ public class ABCDNetwork
             new java.io.FileOutputStream(outputWeightsFileName))
       ) 
       {
-         out.writeInt(numInputs); // saves dimensions of network to the file
-         out.writeInt(numHidden1);
-
-         for (int m = 0; m < numInputs; m++) 
+         for (int n = 1; n < numActivationLayers; n++)
          {
-            for (int k = 0; k < numHidden1; k++) 
+            out.writeInt(layerSizes[n - 1]); // saves dimensions of network to the file
+            out.writeInt(layerSizes[n]);
+
+            for (int m = 0; m < layerSizes[n - 1]; m++) 
             {
-               out.writeDouble(w[INPUT_INEDX][m][k]);
-            }
-         } // for (int m = 0; m < numInputs; m++)
-
-         out.writeInt(numHidden1);
-         out.writeInt(numHidden2);
-
-         for (int k = 0; k < numHidden1; k++) 
-         {
-            for (int j = 0; j < numHidden2; j++) 
-            {
-               out.writeDouble(w[HIDDEN1_INDEX][k][j]);
-            }
-         } // for (int k = 0; k < numHidden1; k++)
-
-         out.writeInt(numHidden2);
-         out.writeInt(numOutputs);
-
-         for (int j=0; j < numHidden2; j++)
-         {
-            for (int i = 0; i < numOutputs; i++)
-            {
-               out.writeDouble(w[HIDDEN2_INDEX][j][i]);
-            }
-         } // for (int j = 0; j < numHidden2; j++)
+               for (int k = 0; k < layerSizes[n]; k++) 
+               {
+                  out.writeDouble(w[n - 1][m][k]);
+               }
+            } // for (int m = 0; m < layerSizes[n - 1]; m++)
+         } // for (int n = 1; n < numActivationLayers; n++)
       } // try()
       catch (java.io.IOException e) 
       {
@@ -522,29 +432,16 @@ public class ABCDNetwork
 */
    public void generateRandomWeights()
    {
-      for (int m = 0; m < numInputs; m++)
+      for (int n = 1; n < numActivationLayers; n++)
       {
-         for (int k = 0; k < numHidden1; k++)
+         for (int m = 0; m < layerSizes[n - 1]; m++)
          {
-               w[INPUT_INEDX][m][k] = generateRandomDouble(min, max);
-         }
-      }
-
-      for (int k = 0; k < numHidden1; k++)
-      {
-         for (int j = 0; j < numHidden2; j++)
-         {
-            w[HIDDEN1_INDEX][k][j] = generateRandomDouble(min, max);
-         }
-      }
-      
-      for (int j = 0; j < numHidden2; j++)
-      {
-         for (int i = 0; i < numOutputs; i++)
-         {
-            w[HIDDEN2_INDEX][j][i] = generateRandomDouble(min, max);
-         }
-      }
+            for (int k = 0; k < layerSizes[n]; k++)
+            {
+               w[n - 1][m][k] = generateRandomDouble(min, max);
+            } // for (int k = 0; k < layerSizes[n]; k++)
+         } // for (int m = 0; m < layerSizes[n - 1]; m++)
+      } // for (int n = 1; n < numActivationLayers; n++)
    } // generateRandomWeights()
 
 /*
@@ -557,65 +454,35 @@ public class ABCDNetwork
    }
 
 /*
-* Calculates activations for the first hidden layer (K) during training and stores pre-activation values in theta.
-* Depends on a[INPUT_INEDX] holding the current input activations.
+* Performs a full forward pass during training through all hidden layers and the output layer, and returns half the squared error.
+* Assumes a[INPUT_INDEX] and targets are populated for the current case.
 */
-   public void calculateKActivationsTraining()
+   public double runNetworkForTrain()
    {
-      double sum;
-      
-      int n = HIDDEN1_INDEX;
-      for (int k = 0; k < numHidden1; k++)
+      double sum, omega, currentError;
+      for (int n = 1; n < numActivationLayers - 1; n++) // exclude last layer
       {
-         sum = 0.0;
-         for (int m = 0; m < numInputs; m++)
+         for (int k = 0; k < layerSizes[n]; k++)
          {
-            sum += w[n-1][m][k] * a[n-1][m];
-         }
-         theta[n][k] = sum;
-         a[n][k] = activationFunction.apply(sum);
-      } // for (int k = 0; k < numHidden1; k++)
-   } // calculateKActivationsTraining()
+            sum = 0.0;
+            for (int m = 0; m < layerSizes[n - 1]; m++)
+            {
+               sum += w[n - 1][m][k] * a[n - 1][m];
+            }
+            theta[n][k] = sum;
+            a[n][k] = activationFunction.apply(sum);
+         } // for (int k = 0; k < layerSizes[n]; k++)
+      } // for (int n = 1; n < numActivationLayers - 1; n++)
 
-/*
-* Calculates activations for the second hidden layer (J) during training and stores pre-activation values in theta.
-* Requires calculateKActivationsTraining to have populated a[HIDDEN1_INDEX].
-*/
-   public void calculateJActivationsTraining()
-   {
-      double sum;
-      
-      int n = HIDDEN2_INDEX;
-      for (int j = 0; j < numHidden2; j++)
-      {
-         sum = 0.0;
-         for (int k = 0; k < numHidden1; k++)
-         {
-            sum += w[n-1][k][j] * a[n-1][k];
-         }
-         theta[n][j] = sum;
-         a[n][j] = activationFunction.apply(sum);
-      } // for (int j = 0; j < numHidden2; j++)
-   } // calculateJActivationsTraining()
+      int n = numActivationLayers - 1; // initialize n to be the last activation layer for this loop
 
-/*
-* Calculates the network outputs during training, populates psi for the output layer, and accumulates half-squared error.
-* Returns half the squared error for the currently active training sample.
-*/
-   public double calculateOutputTraining()
-   {
-      double sum;
-      double omega;
-      double currentError;
-
-      int n = OUTPUT_INDEX;
       currentError = 0.0;
       for (int i = 0; i < numOutputs; i++)
       {
          sum = 0.0;
-         for (int j = 0; j < numHidden2; j++)
+         for (int j = 0; j < layerSizes[n - 1]; j++)
          {
-            sum += w[n-1][j][i] * a[n-1][j];
+            sum += w[n - 1][j][i] * a[n - 1][j];
          }
          a[n][i] = activationFunction.apply(sum);
          omega = targets[i] - a[n][i];
@@ -623,60 +490,29 @@ public class ABCDNetwork
          currentError += omega * omega;
       } // for (int i = 0; i < numOutputs; i++)
       return currentError / 2.0;
-   } // calculateOutputTraining()
-
-/*
-* Performs a full forward pass during training (K, J, and output layers) and returns half the squared error.
-* Assumes a[INPUT_INEDX] and targets are populated for the current case.
-*/
-   public double runNetworkForTrain()
-   {
-      calculateKActivationsTraining();
-      calculateJActivationsTraining();
-      return calculateOutputTraining();
    }
 
 /*
-* Performs a forward pass using the current values in a[INPUT_INEDX] as input activations.
+* Performs a forward pass using the current values in a[INPUT_INDEX] as input activations.
 * Useful for inference or evaluation after training.
 */
    public void run()
    {
       double sum;
 
-      int n = HIDDEN1_INDEX;
-      for (int k = 0; k < numHidden1; k++)
+      for (int n = 1; n < numActivationLayers; n++)
       {
-         sum = 0.0;
-         for (int m = 0; m < numInputs; m++)
+         for (int k = 0; k < layerSizes[n]; k++)
          {
-            sum += w[n-1][m][k] * a[n-1][m];
-         }
-         a[n][k] = activationFunction.apply(sum);
-      } // for (int k = 0; k < numHidden1; k++)
-      
-      n = HIDDEN2_INDEX;
-      for (int j = 0; j < numHidden2; j++)
-      {
-         sum = 0.0;
-         for (int k = 0; k < numHidden1; k++)
-         {
-            sum += w[n-1][k][j] * a[n-1][k];
-         }
-         a[n][j] = activationFunction.apply(sum);
-      } // for (int j = 0; j < numHidden2; j++)
-
-      n = OUTPUT_INDEX;
-      for (int i = 0; i < numOutputs; i++)
-      {
-         sum = 0.0;
-         for (int j = 0; j < numHidden2; j++)
-         {
-            sum += w[n-1][j][i] * a[HIDDEN2_INDEX][j];
-         }
-         a[n][i] = activationFunction.apply(sum);
-      } // for (int i = 0; i < numOutputs; i++)
-   } // forwardPass(double[] inputs)
+            sum = 0.0;
+            for (int m = 0; m < layerSizes[n - 1]; m++)
+            {
+               sum += w[n - 1][m][k] * a[n - 1][m];
+            }
+            a[n][k] = activationFunction.apply(sum);
+         } // for (int k = 0; k < layerSizes[n]; k++)
+      } // for (int n = 1; n < numActivationLayers; n++)
+   } // run()
 
 /*
 * Runs the network on every configured case, capturing timing metrics and copying outputs for later reporting.
@@ -686,9 +522,9 @@ public class ABCDNetwork
       runStartTimeMillis = System.currentTimeMillis();
       for (int t = 0; t < numCases; t++)
       {
-         a[INPUT_INEDX] = inputTable[t];
+         a[INPUT_INDEX] = inputTable[t];
          run();
-         System.arraycopy(a[OUTPUT_INDEX], 0, networkOutputs[t], 0, numOutputs); // Efficient array copy
+         System.arraycopy(a[numActivationLayers - 1], 0, networkOutputs[t], 0, numOutputs); // Efficient array copy
       }
       runEndTimeMillis = System.currentTimeMillis();
    } // runAllCases()
@@ -709,7 +545,7 @@ public class ABCDNetwork
          totalError = 0.0;
          for (int t = 0; t < numCases; t++)
          {
-            a[INPUT_INEDX] = inputTable[t];
+            a[INPUT_INDEX] = inputTable[t];
             targets = groundTruths[t];
 
             totalError += runNetworkForTrain();
@@ -719,6 +555,11 @@ public class ABCDNetwork
 
          averageError = totalError / (double) numCases;
          epochs++;
+
+         if (keepAlive != 0 && epochs % keepAlive == 0)
+         {
+            System.out.printf("Iteration %d, Error = %f\n", epochs, averageError);
+         }
       } // while (epochs < IterationMax && averageError > ECutoff)
       trainEndTimeMillis = System.currentTimeMillis();
    } // loopTraining()
@@ -729,42 +570,43 @@ public class ABCDNetwork
 */
    public void train()
    {
-      double omegaJ, omegaK;
+      double omega;
 
-      int n = HIDDEN2_INDEX;
-      for (int j = 0; j < numHidden2; j++)
+      for (int n = numActivationLayers - 1; n > HIDDEN2_INDEX; n--)
       {
-         omegaJ = 0.0;
-         for (int i = 0; i < numOutputs; i++)
+         for (int k = 0; k < layerSizes[n]; k++)
          {
-            omegaJ += psi[n+1][i] * w[n][j][i] ;
-            w[n][j][i] += learningRate * a[n][j] * psi[n+1][i];
-         }
+            omega = 0.0;
+            for (int m = 0; m < layerSizes[n - 1]; m++)
+            {
+               omega = psi[n][k] * w[n - 1][m][k];
+               w[n - 1][m][k] += learningRate * a[n - 1][m] * psi[n][k];
+            }
+            psi[n - 1][k] = omega * activationFunctionDerivative.apply(theta[n - 1][k]);
+         } // for (int k = 0; k < layerSizes[n]; k++)
+      } // for (int n = numActivationLayers - 1; n > HIDDEN2_INDEX; n--)
 
-         psi[n][j] = omegaJ * activationFunctionDerivative.apply(theta[n][j]);
-      } // for (int j = 0; j < numHidden2; j++)
-
-      n = HIDDEN1_INDEX;
-      for (int k = 0; k < numHidden1; k++)
+      int n = HIDDEN1_INDEX;
+      for (int m = 0; m < layerSizes[n]; m++)
       {
-         omegaK = 0.0;
-         for (int j = 0; j < numHidden2; j++)
+         omega = 0.0;
+         for (int k = 0; k < layerSizes[n + 1]; k++)
          {
-            omegaK += psi[n+1][j] * w[n][k][j];
-            w[n][k][j] += learningRate * a[n][k] * psi[n+1][j];
+            omega += psi[n+1][k] * w[n][m][k];
+            w[n][m][k] += learningRate * a[n][m] * psi[n+1][k];
          }
          
-         psi[n][k] = omegaK * activationFunctionDerivative.apply(theta[n][k]);
+         psi[n][m] = omega * activationFunctionDerivative.apply(theta[n][m]);
 
-         for (int m = 0; m < numInputs; m++)
+         for (int x = 0; x < layerSizes[n - 1]; x++)
          {
-            w[n-1][m][k] += learningRate * a[n-1][m] * psi[n][k];
+            w[n-1][x][m] += learningRate * a[n-1][x] * psi[n][m];
          }
-      } // for (int k = 0; k < numHidden1; k++)
+      } // for (int m = 0; m < layerSizes[n]; m++)
    } // train()
 
 /*
-* Formats the first len entries of a double array as [v1, v2, ...] using formatDouble precision.
+* Formats the first len entries of a double array as [v1, v2, ...] using 4 decimal places.
 * Caller must ensure len does not exceed arr.length.
 */
    public static String formatDoubleArr(double[] arr, int len)
@@ -799,8 +641,8 @@ public class ABCDNetwork
    } // printTrainingResults()
 
 /**
- * Prints run-time metrics along with outputs for each case, honoring {@code showInputs} and {@code showGroundTruths}.
- */
+* Prints run-time metrics along with outputs for each case, honoring {@code showInputs} and {@code showGroundTruths}.
+*/
    public void printRunResults()
    {
       System.out.println("Run Results:");
@@ -818,14 +660,18 @@ public class ABCDNetwork
    } // printRunResults()
 
 /**
- * Prints the network parameters currently loaded in memory, including architecture, training, and display settings.
- */
+* Prints the network parameters currently loaded in memory, including architecture, training, and display settings.
+*/
    public void printNetworkParameters()
    {
-      System.out.println("======== Network Parameters ========");
+      System.out.println("======== Network Parameters Loaded from " + configFileName + " ========");
 
       System.out.println("Network Architecture:");
-      System.out.println(numInputs  + "-" + numHidden1 + "-" + numHidden2 + "-" + numOutputs);
+      for (int n = 0; n < numActivationLayers; n++)
+      {
+         System.out.print(layerSizes[n] + "-");
+      }
+      System.out.println();
       System.out.println("Activation Function: " + activationName);
 
       if (training) 
@@ -838,58 +684,21 @@ public class ABCDNetwork
       } // if (training)
       
       System.out.println("\nNetwork Array Initializations:");
-      System.out.println("Weight Initialization Range: [" + min + ", " + max + ")");
-      System.out.println("Manual Weights: " + manualWeights);
+      if (!loadWeightsFromFile)
+      {
+         System.out.println("Weight Initialization Range: [" + min + ", " + max + ")");
+      }
       System.out.println("Load Weights from " + inputWeightsFileName + ": " + loadWeightsFromFile);
       System.out.println("Save Weights to " + outputWeightsFileName + ": " + saveWeightsToFile);
-      System.out.println("Load Truth Table from " + truthTableFileName + ": " + loadTruthTableFromCSV);
+      System.out.println("Load Truth Table from " + truthTableFileName);
       System.out.println("Loading test cases from " + inputTableFileName);
 
 
       System.out.println("\nConfiguration Booleans:");
       System.out.println("Run Test Cases: " + runTestCases);
       System.out.println("Show Inputs: " + showInputs);
-      System.out.println("Show Ground Truths: " + showGroundTruths);
+      System.out.println("Show Ground Truths: " + showGroundTruths + "\n");
    } // printNetworkParameters()
-
-/**
- * Prints the network weights.
- */
-   public void printNetworkWeights()
-   {
-      System.out.println("\nNetwork Weights:");
-
-      System.out.println("Layer 1 Weights:");
-      for (int m = 0; m < numInputs; m++)
-      {
-         for (int k = 0; k < numHidden1; k++)
-         {
-            System.out.print(w[INPUT_INEDX][m][k] + " ");
-         }
-         System.out.println();
-      } // for (int m = 0; m < numInputs; m++)
-
-      System.out.println("Layer 2 Weights:");
-      for (int k = 0; k < numHidden1; k++)
-      {
-         for (int j = 0; j < numHidden2; j++)
-         {
-            System.out.print(w[HIDDEN1_INDEX][k][j] + " ");
-         }
-         System.out.println();
-      } // for (int k = 0; k < numHidden1; k++)
-
-      System.out.println("Layer 3 Weights:");
-      for (int j = 0; j < numHidden2; j++)
-      {
-         for (int i = 0; i < numOutputs; i++)
-         {
-            System.out.print(w[HIDDEN2_INDEX][j][i] + " ");
-         }
-         System.out.println();
-      } // for (int j = 0; j < numHidden2; j++)
-      System.out.println();
-   } // printNetworkWeights()
 
 /**
 * Main entry point for running the network.
@@ -897,7 +706,7 @@ public class ABCDNetwork
 */
    public static void main(String[] args)
    {
-      ABCDNetwork p = new ABCDNetwork();
+      NLayerNetwork p = new NLayerNetwork();
       String configFileName = null;
 
       if (args.length > 0)
@@ -935,4 +744,4 @@ public class ABCDNetwork
          System.err.println(e.getMessage());
       }
    } // main(String[] args)
-} // class ABCDNetwork
+} // class NLayerNetwork
