@@ -18,6 +18,34 @@ import java.math.RoundingMode;
 * External dependency: Gson (https://github.com/google/gson).
 * Gson APIs used: com.google.gson.Gson#fromJson(Reader, Class) and com.google.gson.JsonObject getters.
 *
+* Table of Contents:
+* public void initializeNetworkParams(String commandLineConfigFileName)
+* private static JsonObject getRequiredObject(JsonObject parent, String key)
+* private static int getRequiredInt(JsonObject obj, String key, String section)
+* private static double getRequiredDouble(JsonObject obj, String key, String section)
+* private static String getRequiredString(JsonObject obj, String key, String section)
+* private static boolean getRequiredBoolean(JsonObject obj, String key, String section)
+* private static int[] getRequiredIntArray(JsonObject obj, String key, String section)
+* public void allocateNetworkArrays()
+* public static int arrMax(int[] arr, int start, int end)
+* public void populateNetworkArrays()
+* public void loadInputsAndTruthTable()
+* public static void loadDoubleArrfromCSV(double[][] arr, int arrRows, int arrCols, String filename)
+* public void loadWeightsFromFile()
+* public void saveWeights()
+* public void generateRandomWeights()
+* public static double generateRandomDouble(double min, double max)
+* public double runNetworkForTrain()
+* public void run()
+* public void runAllCases()
+* public void loopTraining()
+* public void train()
+* public static String formatDoubleArr(double[] arr, int len)
+* public void printTrainingResults()
+* public void printRunResults()
+* public void printNetworkParameters()
+* public static void main(String[] args)
+*
 * Author: Vouk Praun-Petrovic
 * Created: September 9, 2024
 */
@@ -103,22 +131,22 @@ public class NLayerNetwork
          JsonObject json = new Gson().fromJson(new java.io.FileReader(configFileName), JsonObject.class);
          
          String networkSectionHeader = "network";
-         JsonObject network = getRequiredObject(json, networkSectionHeader); // Network architecture parameters
+         JsonObject network = getRequiredObject(json, networkSectionHeader);           // Network architecture parameters
          numActivationLayers = getRequiredInt(network, "numActivationLayers", networkSectionHeader);
          layerSizes = getRequiredIntArray(network, "layerSizes", networkSectionHeader);
          if (layerSizes.length != numActivationLayers)
          {
             throw new java.io.IOException("Mismatch between number of activation layers and activation layer size list.");
          }
-         numInputs = layerSizes[0]; // Named numInputs since it's used so often
-         numOutputs = layerSizes[numActivationLayers - 1]; // Named numOutputs since it's used so often
+         numInputs = layerSizes[0];                                                    // First layer size is the number of inputs
+         numOutputs = layerSizes[numActivationLayers - 1];                             // Last layer size is the number of outputs
 
          activationName = getRequiredString(network, "activationName", networkSectionHeader);
          activationFunction = ACTIVATION_MAP.get(activationName);
          activationFunctionDerivative = ACTIVATION_DERIVATIVE_MAP.get(activationName);
 
          String trainingSectionHeader = "training";
-         JsonObject trainingParams = getRequiredObject(json, trainingSectionHeader); // Training parameters
+         JsonObject trainingParams = getRequiredObject(json, trainingSectionHeader);   // Training parameters
          learningRate = getRequiredDouble(trainingParams, "learningRate", trainingSectionHeader);
          ECutoff = getRequiredDouble(trainingParams, "ECutoff", trainingSectionHeader);
          IterationMax = getRequiredInt(trainingParams, "IterationMax", trainingSectionHeader);
@@ -126,7 +154,7 @@ public class NLayerNetwork
          keepAlive = getRequiredInt(trainingParams, "keepAlive", trainingSectionHeader);
 
          String arraySectionHeader = "arrayParameters";
-         JsonObject arrParams = getRequiredObject(json, arraySectionHeader); // Array initialization parameters
+         JsonObject arrParams = getRequiredObject(json, arraySectionHeader);        // Array initialization parameters
          min = getRequiredDouble(arrParams, "min", arraySectionHeader);
          max = getRequiredDouble(arrParams, "max", arraySectionHeader);
          loadWeightsFromFile = getRequiredBoolean(arrParams, "loadWeightsFromFile", arraySectionHeader);
@@ -137,13 +165,13 @@ public class NLayerNetwork
          truthTableFileName = getRequiredString(arrParams, "truthTableFileName", arraySectionHeader);
 
          String executionSectionHeader = "execution";
-         JsonObject execution = getRequiredObject(json, executionSectionHeader); // Execution parameters
+         JsonObject execution = getRequiredObject(json, executionSectionHeader);    // Execution parameters
          training = getRequiredBoolean(execution, "training", executionSectionHeader);
          runTestCases = getRequiredBoolean(execution, "runTestCases", executionSectionHeader);
          booleanOperation = getRequiredString(execution, "booleanOperation", executionSectionHeader);
 
          String displaySectionHeader = "display";
-         JsonObject display = getRequiredObject(json, displaySectionHeader); // Display parameters
+         JsonObject display = getRequiredObject(json, displaySectionHeader);        // Display parameters if training is true
          showInputs = getRequiredBoolean(display, "showInputs", displaySectionHeader);
          showGroundTruths = getRequiredBoolean(display, "showGroundTruths", displaySectionHeader);
       } // try()
@@ -246,26 +274,26 @@ public class NLayerNetwork
       inputTable = new double[numCases][numInputs];
       networkOutputs = new double[numCases][numOutputs];
 
-      w = new double[numActivationLayers - 1][][]; // w[0] is empty, w[1] operates on input layer, etc
+      w = new double[numActivationLayers - 1][][];
       for (int n = 0; n < numActivationLayers - 1; n++)
       {
-         w[n] = new double[layerSizes[n]][layerSizes[n + 1]]; // the n-index corresponds to the layer the weights output
+         w[n] = new double[layerSizes[n]][layerSizes[n + 1]]; // the n-index corresponds to the layer the weights output to
       }
-      a = new double[numActivationLayers][arrMax(layerSizes, 1, numActivationLayers)]; // inputs are assigned as pointer to a[0]
+      a = new double[numActivationLayers][arrMax(layerSizes, 1, numActivationLayers)];
 
       if (training)
       {
-         psi = new double[numActivationLayers][arrMax(layerSizes, 1, numActivationLayers)];  // one psi array for each layer
-         theta = new double[numActivationLayers - 1][arrMax(layerSizes, 1, numActivationLayers - 1)]; // -1 since there's no output layer theta 
+         psi = new double[numActivationLayers][arrMax(layerSizes, 1, numActivationLayers)];
+         theta = new double[numActivationLayers - 1][arrMax(layerSizes, 1, numActivationLayers - 1)];
       }
 
-      if (training | showGroundTruths)
+      if (training || showGroundTruths)
       {
          groundTruths = new double[numCases][layerSizes[numActivationLayers - 1]];
       }
    } // allocateNetworkArrays()
 
-/** 
+/*
 * Finds the maximum value in an integer array between start and end indices.
 * Returns the maximum value found.
 */
@@ -308,7 +336,10 @@ public class NLayerNetwork
    public void loadInputsAndTruthTable() throws java.io.IOException
    {
       loadDoubleArrfromCSV(inputTable, numCases, numInputs, inputTableFileName); // Load the input data
-      loadDoubleArrfromCSV(groundTruths, numCases, numOutputs, truthTableFileName); // Load the truth data
+      if (showGroundTruths || training)
+      {
+         loadDoubleArrfromCSV(groundTruths, numCases, numOutputs, truthTableFileName); // Load the truth data
+      }
    } // loadInputsAndTruthTable()
 
 /*
@@ -369,7 +400,7 @@ public class NLayerNetwork
          int layerInputDim;
          int layerOutputDim;
 
-         for (int n = 1; n < numActivationLayers; n++) // N starts at 1 less weight layer than activations
+         for (int n = 1; n < numActivationLayers; n++)  // n starts from 1 because w[n-1] is indexed
          {
             layerInputDim = in.readInt();
             layerOutputDim = in.readInt();
@@ -460,6 +491,7 @@ public class NLayerNetwork
    public double runNetworkForTrain()
    {
       double sum, omega, currentError;
+      
       for (int n = 1; n < numActivationLayers - 1; n++) // exclude last layer
       {
          for (int k = 0; k < layerSizes[n]; k++)
@@ -490,7 +522,7 @@ public class NLayerNetwork
          currentError += omega * omega;
       } // for (int i = 0; i < numOutputs; i++)
       return currentError / 2.0;
-   }
+   } // runNetworkForTrain()
 
 /*
 * Performs a forward pass using the current values in a[INPUT_INDEX] as input activations.
@@ -574,16 +606,16 @@ public class NLayerNetwork
 
       for (int n = numActivationLayers - 1; n > HIDDEN2_INDEX; n--)
       {
-         for (int k = 0; k < layerSizes[n]; k++)
+         for (int m = 0; m < layerSizes[n - 1]; m++)
          {
             omega = 0.0;
-            for (int m = 0; m < layerSizes[n - 1]; m++)
+            for (int k = 0; k < layerSizes[n]; k++)
             {
-               omega = psi[n][k] * w[n - 1][m][k];
+               omega += psi[n][k] * w[n - 1][m][k];
                w[n - 1][m][k] += learningRate * a[n - 1][m] * psi[n][k];
             }
-            psi[n - 1][k] = omega * activationFunctionDerivative.apply(theta[n - 1][k]);
-         } // for (int k = 0; k < layerSizes[n]; k++)
+            psi[n - 1][m] = omega * activationFunctionDerivative.apply(theta[n - 1][m]);
+         } // for (int m = 0; m < layerSizes[n - 1]; m++)
       } // for (int n = numActivationLayers - 1; n > HIDDEN2_INDEX; n--)
 
       int n = HIDDEN1_INDEX;
@@ -592,15 +624,15 @@ public class NLayerNetwork
          omega = 0.0;
          for (int k = 0; k < layerSizes[n + 1]; k++)
          {
-            omega += psi[n+1][k] * w[n][m][k];
-            w[n][m][k] += learningRate * a[n][m] * psi[n+1][k];
+            omega += psi[n + 1][k] * w[n][m][k];
+            w[n][m][k] += learningRate * a[n][m] * psi[n + 1][k];
          }
          
          psi[n][m] = omega * activationFunctionDerivative.apply(theta[n][m]);
 
          for (int x = 0; x < layerSizes[n - 1]; x++)
          {
-            w[n-1][x][m] += learningRate * a[n-1][x] * psi[n][m];
+            w[n - 1][x][m] += learningRate * a[n - 1][x] * psi[n][m];
          }
       } // for (int m = 0; m < layerSizes[n]; m++)
    } // train()
@@ -611,10 +643,11 @@ public class NLayerNetwork
 */
    public static String formatDoubleArr(double[] arr, int len)
    {
+      final int DECIMAL_PLACES = 4;
       String result = "[";
       for (int index = 0; index < len; index++)
       {
-         result += new BigDecimal(arr[index]).setScale(4, RoundingMode.HALF_UP).toString();
+         result += new BigDecimal(arr[index]).setScale(DECIMAL_PLACES, RoundingMode.HALF_UP).toString();
          if (index < len - 1) // every element except last one is followed by a comma
          {
             result += ", ";
@@ -622,8 +655,8 @@ public class NLayerNetwork
       } // for (int index = 0; index < len; index++)
       return result + "]";
    } // formatDoubleArr(double[] arr, int len)
-   
-/**
+
+/*
 * Prints the results of the training process, including convergence status and final error.
 */
    public void printTrainingResults()
@@ -637,11 +670,11 @@ public class NLayerNetwork
       
       else if (averageError <= ECutoff)
          System.out.print("Training converged successfully after " + epochs + " iterations. Final error: "); 
-      System.out.printf("%.4g%n", averageError, "\n");
+      System.out.printf("%.4g%n", averageError);
    } // printTrainingResults()
 
-/**
-* Prints run-time metrics along with outputs for each case, honoring {@code showInputs} and {@code showGroundTruths}.
+/*
+* Prints run-time metrics along with outputs for each case, honoring showInputs and showGroundTruths.
 */
    public void printRunResults()
    {
@@ -650,16 +683,19 @@ public class NLayerNetwork
       for (int t = 0; t < numCases; t++)
       {
          if (showInputs)
+         {
             System.out.print("Inputs: " + formatDoubleArr(inputTable[t], numInputs) + " ");
-
+         }
          if (showGroundTruths)
+         {
             System.out.print("Ground Truth: " + formatDoubleArr(groundTruths[t], numOutputs) + " ");
+         }
 
          System.out.println("Output: " + formatDoubleArr(networkOutputs[t], numOutputs));
       } // for (int t = 0; t < numCases; t++)
    } // printRunResults()
 
-/**
+/*
 * Prints the network parameters currently loaded in memory, including architecture, training, and display settings.
 */
    public void printNetworkParameters()
@@ -669,11 +705,14 @@ public class NLayerNetwork
       System.out.println("Network Architecture:");
       for (int n = 0; n < numActivationLayers; n++)
       {
-         System.out.print(layerSizes[n] + "-");
+         System.out.print(layerSizes[n]);
+         if (n < numActivationLayers - 1)
+         {
+            System.out.print("-");
+         }
       }
       System.out.println();
       System.out.println("Activation Function: " + activationName);
-
       if (training) 
       {
          System.out.println("\nTraining Configuration:");
@@ -681,7 +720,7 @@ public class NLayerNetwork
          System.out.println("Number of Training Cases: " + numCases);
          System.out.println("Training Error Cutoff: " + ECutoff);
          System.out.println("Max Training Iterations: " + IterationMax);
-      } // if (training)
+      }
       
       System.out.println("\nNetwork Array Initializations:");
       if (!loadWeightsFromFile)
@@ -693,16 +732,15 @@ public class NLayerNetwork
       System.out.println("Load Truth Table from " + truthTableFileName);
       System.out.println("Loading test cases from " + inputTableFileName);
 
-
       System.out.println("\nConfiguration Booleans:");
       System.out.println("Run Test Cases: " + runTestCases);
       System.out.println("Show Inputs: " + showInputs);
       System.out.println("Show Ground Truths: " + showGroundTruths + "\n");
    } // printNetworkParameters()
 
-/**
+/*
 * Main entry point for running the network.
-* @param args Command-line arguments
+* Accepts optional command-line argument for config file name.
 */
    public static void main(String[] args)
    {

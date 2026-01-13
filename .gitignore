@@ -46,3 +46,16 @@ __pycache__/
 
 # ignore Gson stub files, they are just a workaround for my editor to not complain about the Gson dependency
 src/com
+
+# Ignore training log files 
+*.txt
+
+# Ignore all CSV files except those starting with "demo"
+*.csv
+!demo*.csv
+
+# Ignore all JSON files except those starting with "demo"
+*.json
+!demo*.json
+
+# Ignore all bin file

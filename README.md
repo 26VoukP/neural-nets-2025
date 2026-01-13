@@ -4,11 +4,13 @@
 
 NeuralNets2025 is a Java-based educational neural network library that implements a simple feedforward neural network with support for multiple activation functions, backpropagation, and customizable architecture. The project is designed for learning and experimentation with neural networks, including XOR and other basic supervised learning tasks.
 
+**Note:** Versions for previous labs can be found in the commit history. Only demo configuration and data files (those starting with "demo") are tracked in the repository; other CSV and JSON files remain local only.
+
 ## Features
 
-- Feedforward neural network with one hidden layer
+- Feedforward neural network with configurable number of layers
 - **JSON-based configuration** - Edit network settings without recompiling
-- Customizable number of input, hidden, and output neurons
+- Customizable number of layers and neurons per layer
 - Multiple activation functions: sigmoid, tanh, linear
 - Backpropagation training with mean squared error loss
 - **CSV data loading** - Load training inputs and ground truth from CSV files
@@ -21,17 +23,21 @@ NeuralNets2025 is a Java-based educational neural network library that implement
 ```
 NeuralNets2025/
 ├── src/
-│   └── ABCNetwork.java         # Main neural network implementation
-├── bin/                         # Compiled class files (auto-generated)
+│   └── NLayerNetwork.java      # Main neural network implementation
+├── bin/                         # Compiled class files (auto-generated, ignored)
 ├── lib/
 │   └── gson-2.10.1.jar         # JSON parsing library
-├── network-config.json          # Network configuration file
-├── input-table.csv              # Training input data (optional)
-├── truth-table.csv              # Ground truth data (optional)
-├── compile.bat / compile.sh     # Compilation scripts
-├── run.bat / run.sh             # Execution scripts
+├── demo-network-config.json     # Example network configuration file
+├── demo-input-table.csv         # Example training input data
+├── demo-truth-table.csv         # Example ground truth data
+├── compile.bat                  # Compilation script (Windows)
+├── run.bat                      # Execution script (Windows)
+├── run-VoukAsus.bat             # Custom execution script
+├── .gitignore                   # Git ignore rules
 └── README.md                    # This file
 ```
+
+**Note:** Only demo CSV and JSON files (those starting with "demo") are tracked in the repository. Other CSV and JSON files are ignored and remain local only. Versions for previous labs can be found in the commit history.
 
 ## Quick Start
 
@@ -70,15 +76,17 @@ javac -cp "lib/gson-2.10.1.jar" -d bin src/ABCNetwork.java
 **Run:**
 ```bash
 # Windows
-java -cp "bin;lib\gson-2.10.1.jar" ABCNetwork
+java -cp "bin;lib\gson-2.10.1.jar" NLayerNetwork
 
 # Linux/macOS
-java -cp "bin:lib/gson-2.10.1.jar" ABCNetwork
+java -cp "bin:lib/gson-2.10.1.jar" NLayerNetwork
 ```
 
 ## Configuration
 
-The network is configured via `network-config.json`, which can be edited at runtime without recompiling. All settings are loaded when the program starts.
+The network is configured via a JSON configuration file (e.g., `demo-network-config.json`), which can be edited at runtime without recompiling. All settings are loaded when the program starts. You can specify a custom config file as a command-line argument: `java -cp "bin;lib\gson-2.10.1.jar" NLayerNetwork your-config.json`
+
+**Note:** Only demo configuration files (those starting with "demo") are tracked in the repository. Other configuration files remain local only. Versions for previous labs can be found in the commit history.
 
 ### Configuration File Structure
 
@@ -97,9 +105,8 @@ The network is configured via `network-config.json`, which can be edited at runt
 #### `network` - Network Architecture
 | Parameter | Type | Description |
 |-----------|------|-------------|
-| `numInputs` | int | Number of input neurons |
-| `numHidden` | int | Number of hidden layer neurons |
-| `numOutputs` | int | Number of output neurons |
+| `numActivationLayers` | int | Number of activation layers (excluding input layer) |
+| `layerSizes` | int[] | Array specifying the size of each layer, including input layer (e.g., `[2, 5, 3]` for 2 inputs, 5 hidden, 3 outputs) |
 | `activationName` | string | Activation function: `"sigmoid"`, `"tanh"`, or `"linear"` |
 
 #### `training` - Training Hyperparameters
@@ -109,20 +116,19 @@ The network is configured via `network-config.json`, which can be edited at runt
 | `ECutoff` | double | Training stops when average error falls below this value |
 | `IterationMax` | int | Maximum number of training epochs |
 | `numCases` | int | Number of training examples |
+| `keepAlive` | int | Print training progress every N iterations (0 to disable) |
 
 #### `arrayParameters` - Data Loading and Weight Management
 | Parameter | Type | Description |
 |-----------|------|-------------|
 | `min` | double | Minimum value for random weight initialization |
 | `max` | double | Maximum value for random weight initialization |
-| `manualWeights` | boolean | Use predefined weights (only for 2-2-1 networks) |
 | `loadWeightsFromFile` | boolean | Load weights from binary file instead of initializing |
 | `saveWeightsToFile` | boolean | Save trained weights to binary file after training |
 | `inputWeightsFileName` | string | Filename to load weights from |
 | `outputWeightsFileName` | string | Filename to save weights to |
-| `loadTruthTableFromCSV` | boolean | Load training data from CSV files instead of hardcoded values |
-| `inputTableFileName` | string | CSV file containing training inputs |
-| `truthTableFileName` | string | CSV file containing ground truth outputs |
+| `inputTableFileName` | string | CSV file containing training inputs (if specified, data will be loaded from CSV) |
+| `truthTableFileName` | string | CSV file containing ground truth outputs (if specified, data will be loaded from CSV) |
 
 #### `execution` - Runtime Behavior
 | Parameter | Type | Description |
@@ -142,28 +148,26 @@ The network is configured via `network-config.json`, which can be edited at runt
 ```json
 {
   "network": {
-    "numInputs": 2,
-    "numHidden": 5,
-    "numOutputs": 3,
+    "numActivationLayers": 3,
+    "layerSizes": [2, 5, 3],
     "activationName": "sigmoid"
   },
   "training": {
     "learningRate": 0.3,
     "ECutoff": 0.0002,
     "IterationMax": 100000,
-    "numCases": 4
+    "numCases": 4,
+    "keepAlive": 0
   },
   "arrayParameters": {
-    "min": 0.1,
+    "min": -1.5,
     "max": 1.5,
-    "manualWeights": false,
     "loadWeightsFromFile": false,
-    "saveWeightsToFile": true,
-    "inputWeightsFileName": "nothing.bin",
-    "outputWeightsFileName": "outputWeights.bin",
-    "loadTruthTableFromCSV": true,
-    "inputTableFileName": "input-table.csv",
-    "truthTableFileName": "truth-table.csv"
+    "saveWeightsToFile": false,
+    "inputWeightsFileName": "weights.bin",
+    "outputWeightsFileName": "weights.bin",
+    "inputTableFileName": "demo-input-table.csv",
+    "truthTableFileName": "demo-truth-table.csv"
   },
   "execution": {
     "training": true,
@@ -179,7 +183,7 @@ The network is configured via `network-config.json`, which can be edited at runt
 
 ## CSV Data Format
 
-When `loadTruthTableFromCSV` is set to `true`, the network loads data from CSV files.
+When `inputTableFileName` and `truthTableFileName` are specified in the configuration, the network loads data from CSV files.
 
 ### Format Requirements
 
@@ -210,7 +214,7 @@ value1,value2,...
 
 ### CSV Loading Features
 
-- **Dimension validation**: The CSV must match the dimensions specified in the config (`numCases × numInputs/numOutputs`)
+- **Dimension validation**: The CSV must match the dimensions specified in the config (`numCases × layerSizes[0]` for inputs, `numCases × layerSizes[-1]` for outputs)
 - **Error reporting**: Provides specific error messages indicating which row/column has issues
 - **Flexible values**: Supports any numeric values (not just 0.0 and 1.0)
 
@@ -234,7 +238,8 @@ Set `loadWeightsFromFile: true` to load previously saved weights instead of rand
 ```
 ======== Network Parameters ========
 Network Architecture:
-2-5-3
+Layer sizes: [2, 5, 3]
+Number of activation layers: 3
 Learning Rate: 0.3
 Activation Function: sigmoid
 
@@ -257,9 +262,9 @@ Inputs: [1.0, 1.0] Ground Truth: [1.0, 1.0, 0.0] Output: [0.9874990097876581, 0.
 ## Common Tasks
 
 ### Train a new network
-1. Edit `network-config.json` with desired architecture and training parameters
+1. Create or edit a configuration file (e.g., `demo-network-config.json`) with desired architecture and training parameters
 2. Set `"training": true` and `"loadWeightsFromFile": false`
-3. Run `./compile.bat` (or `.sh`) then `./run.bat` (or `.sh`)
+3. Run `.\compile.bat` then `.\run.bat` (or specify your config file: `.\run.bat your-config.json`)
 
 ### Load and test existing weights
 1. Set `"training": false` and `"loadWeightsFromFile": true`
@@ -271,9 +276,12 @@ Inputs: [1.0, 1.0] Ground Truth: [1.0, 1.0, 0.0] Output: [0.9874990097876581, 0.
 2. No need to recompile - just run again
 
 ### Use custom training data
-1. Create `input-table.csv` and `truth-table.csv` with your data
-2. Set `"loadTruthTableFromCSV": true`
+1. Create CSV files (e.g., `input-table.csv` and `truth-table.csv`) with your data
+2. Set `"loadTruthTableFromCSV": true` in your configuration file
 3. Update `"numCases"`, `"numInputs"`, and `"numOutputs"` to match your data dimensions
+4. Reference the CSV files in your config's `inputTableFileName` and `truthTableFileName` fields
+
+**Note:** Only demo CSV files (those starting with "demo") are tracked in the repository. Your custom CSV files will remain local only.
 
 ## Dependencies
 
@@ -286,14 +294,14 @@ Inputs: [1.0, 1.0] Ground Truth: [1.0, 1.0, 0.0] Output: [0.9874990097876581, 0.
 - **In VS Code**: The linter may show this error even though compilation works. This is a known issue with the Java Language Server and external JARs.
 - **Solution**: Use the terminal scripts to compile and run, which handle the classpath correctly.
 
-### "Could not find or load main class ABCNetwork"
+### "Could not find or load main class NLayerNetwork"
 - **Windows**: Make sure you're using semicolon (`;`) in the classpath: `bin;lib\gson-2.10.1.jar`
 - **Linux/Mac**: Make sure you're using colon (`:`) in the classpath: `bin:lib/gson-2.10.1.jar`
 - **Git Bash on Windows**: Use the `.bat` files, not the `.sh` files
 
 ### CSV dimension mismatch errors
 - Ensure the first line of your CSV contains the correct dimensions
-- Verify that the number of rows/columns matches `numCases`, `numInputs`, and `numOutputs` in the config
+- Verify that the number of rows/columns matches `numCases` and the corresponding layer sizes in `layerSizes` array
 
 ### Training not converging
 - Try lowering the `learningRate`

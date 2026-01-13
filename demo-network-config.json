@@ -1,0 +1,33 @@
+{
+  "network": {
+    "numActivationLayers": 3,
+    "layerSizes": [2, 5, 3],
+    "activationName": "sigmoid"
+  },
+  "training": {
+    "learningRate": 0.3,
+    "ECutoff": 0.0002,
+    "IterationMax": 100000,
+    "numCases": 4,
+    "keepAlive": 0
+  },
+  "arrayParameters": {
+    "min": -1.5,
+    "max": 1.5,
+    "loadWeightsFromFile": false,
+    "saveWeightsToFile": false,
+    "inputWeightsFileName": "weights.bin",
+    "outputWeightsFileName": "weights.bin",
+    "inputTableFileName": "demo-input-table.csv",
+    "truthTableFileName": "demo-truth-table.csv"
+  },
+  "execution": {
+    "training": true,
+    "runTestCases": true,
+    "booleanOperation": "CUSTOM"
+  },
+  "display": {
+    "showInputs": true,
+    "showGroundTruths": true
+  }
+}
